@@ -70,8 +70,8 @@ interface BudgetDao {
     @Query("SELECT * FROM budgets WHERE categoryId = :categoryId AND isActive = 1 LIMIT 1")
     fun getBudgetByCategory(categoryId: Long): Flow<Budget?>
 
-    @Query("UPDATE budgets SET spent = :spent, updatedAt = :updatedAt WHERE id = :budgetId")
-    suspend fun updateBudgetSpent(budgetId: Long, spent: Double, updatedAt: Long = System.currentTimeMillis())
+    @Query("UPDATE budgets SET updatedAt = :updatedAt WHERE id = :budgetId")
+    suspend fun updateBudgetTimestamp(budgetId: Long, updatedAt: Long = System.currentTimeMillis())
 
     @Query("SELECT EXISTS(SELECT 1 FROM budgets WHERE categoryId = :categoryId AND isActive = 1)")
     fun hasBudgetForCategory(categoryId: Long): Flow<Boolean>
