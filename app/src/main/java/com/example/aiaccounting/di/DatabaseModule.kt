@@ -1,18 +1,18 @@
 package com.example.aiaccounting.di
 
 import android.content.Context
+import androidx.room.Room
 import com.example.aiaccounting.data.local.dao.AccountDao
 import com.example.aiaccounting.data.local.dao.AIConversationDao
 import com.example.aiaccounting.data.local.dao.BudgetDao
 import com.example.aiaccounting.data.local.dao.CategoryDao
 import com.example.aiaccounting.data.local.dao.TransactionDao
 import com.example.aiaccounting.data.local.database.AppDatabase
-import com.example.aiaccounting.data.local.database.DatabaseFactory
-import com.example.aiaccounting.data.local.repository.AccountRepository
-import com.example.aiaccounting.data.local.repository.AIConversationRepository
-import com.example.aiaccounting.data.local.repository.BudgetRepository
-import com.example.aiaccounting.data.local.repository.CategoryRepository
-import com.example.aiaccounting.data.local.repository.TransactionRepository
+import com.example.aiaccounting.data.repository.AccountRepository
+import com.example.aiaccounting.data.repository.AIConversationRepository
+import com.example.aiaccounting.data.repository.BudgetRepository
+import com.example.aiaccounting.data.repository.CategoryRepository
+import com.example.aiaccounting.data.repository.TransactionRepository
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -29,9 +29,14 @@ object DatabaseModule {
 
     @Provides
     @Singleton
-    fun provideAppDatabase(databaseFactory: DatabaseFactory): AppDatabase {
-        // Note: This is a placeholder. In production, database should be initialized with PIN
-        return databaseFactory.getDatabase()
+    fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
+        return Room.databaseBuilder(
+            context,
+            AppDatabase::class.java,
+            AppDatabase.DATABASE_NAME
+        )
+            .fallbackToDestructiveMigration() // For development only
+            .build()
     }
 
     @Provides

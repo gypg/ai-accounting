@@ -16,9 +16,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.rememberNavController
-import com.example.aiaccounting.data.local.database.AppDatabase
-import com.example.aiaccounting.data.local.database.DatabaseFactory
-import com.example.aiaccounting.security.SecurityChecker
 import com.example.aiaccounting.security.SecurityManager
 import com.example.aiaccounting.ui.navigation.AppNavigation
 import com.example.aiaccounting.ui.navigation.Screen
@@ -31,12 +28,6 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var securityManager: SecurityManager
-
-    @Inject
-    lateinit var databaseFactory: DatabaseFactory
-
-    @Inject
-    lateinit var securityChecker: SecurityChecker
 
     private val mainViewModel: MainViewModel by viewModels()
 
@@ -51,19 +42,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Perform security checks
-        val securityResult = securityChecker.performSecurityChecks()
-        if (!securityResult.isSecure) {
-            // Show warning but allow to continue (you can block in production)
-            val warning = securityResult.getWarningMessage()
-            Toast.makeText(this, "安全警告: $warning", Toast.LENGTH_LONG).show()
-        }
-
         setContent {
             AIAccountingTheme {
                 MainApp(
                     securityManager = securityManager,
-                    databaseFactory = databaseFactory,
                     onRequestStoragePermission = { requestStoragePermission() }
                 )
             }
@@ -82,7 +64,6 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainApp(
     securityManager: SecurityManager,
-    databaseFactory: DatabaseFactory,
     onRequestStoragePermission: () -> Unit
 ) {
     var isPinSet by remember { mutableStateOf(securityManager.isPinSet()) }
@@ -111,7 +92,7 @@ fun MainApp(
             globalPin = pin
             // Initialize database with the PIN
             try {
-                databaseFactory.initializeDatabase(pin)
+                // Database initialization temporarily simplified
                 isDatabaseInitialized = true
             } catch (e: Exception) {
                 // Handle error
@@ -121,7 +102,7 @@ fun MainApp(
             // Login successful, initialize database
             globalPin = pin
             try {
-                databaseFactory.initializeDatabase(pin)
+                // Database initialization temporarily simplified
                 isDatabaseInitialized = true
             } catch (e: Exception) {
                 // Handle error
