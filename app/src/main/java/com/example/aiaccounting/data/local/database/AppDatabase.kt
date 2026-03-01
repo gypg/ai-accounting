@@ -18,7 +18,6 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
-/**
  * Main encrypted database using SQLCipher
  */
 @Database(
