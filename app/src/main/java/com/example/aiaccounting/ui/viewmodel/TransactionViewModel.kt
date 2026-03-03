@@ -2,10 +2,15 @@ package com.example.aiaccounting.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.aiaccounting.data.local.entity.Account
+import com.example.aiaccounting.data.local.entity.Category
 import com.example.aiaccounting.data.local.entity.Transaction
 import com.example.aiaccounting.data.local.entity.TransactionType
+import com.example.aiaccounting.data.repository.AccountRepository
+import com.example.aiaccounting.data.repository.CategoryRepository
 import com.example.aiaccounting.data.repository.TransactionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.Calendar
@@ -16,7 +21,9 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class TransactionViewModel @Inject constructor(
-    private val transactionRepository: TransactionRepository
+    private val transactionRepository: TransactionRepository,
+    private val accountRepository: AccountRepository,
+    private val categoryRepository: CategoryRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TransactionUiState())
@@ -36,13 +43,30 @@ class TransactionViewModel @Inject constructor(
             initialValue = emptyList()
         )
 
+    val accounts = accountRepository.getAllAccounts()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val categories = categoryRepository.getAllCategories()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    private var transactionsJob: Job? = null
+
     init {
         loadTransactions()
         loadMonthSummary()
     }
 
     private fun loadTransactions() {
-        viewModelScope.launch {
+        transactionsJob?.cancel()
+        transactionsJob = viewModelScope.launch {
             transactionRepository.getAllTransactions().collect { transactionList ->
                 _uiState.update { it.copy(transactions = transactionList) }
             }
@@ -184,7 +208,7 @@ class TransactionViewModel @Inject constructor(
         }
     }
 
-    fun getTransactionById(transactionId: Long): Flow<Transaction?> {
+    suspend fun getTransactionById(transactionId: Long): Transaction? {
         return transactionRepository.getTransactionById(transactionId)
     }
 

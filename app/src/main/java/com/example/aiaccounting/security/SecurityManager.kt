@@ -22,8 +22,10 @@ class SecurityManager(private val context: Context) {
         private const val MASTER_KEY_ALIAS = "ai_accounting_master_key"
         private const val SHARED_PREFS_NAME = "secure_prefs"
         private const val PIN_HASH_KEY = "pin_hash"
+        private const val PIN_SALT_KEY = "pin_salt"
         private const val FAILED_ATTEMPTS_KEY = "failed_attempts"
         private const val LOCK_TIME_KEY = "lock_time"
+        private const val BIOMETRIC_ENABLED_KEY = "biometric_enabled"
         private const val MAX_FAILED_ATTEMPTS = 5
         private const val LOCK_DURATION_MS = 30 * 60 * 1000 // 30 minutes
     }
@@ -58,10 +60,12 @@ class SecurityManager(private val context: Context) {
         if (isPinSet()) {
             return false // PIN already set
         }
-        
-        val pinHash = hashPin(pin)
+
+        val salt = generateSalt()
+        val pinHash = hashPinWithSalt(pin, salt)
         encryptedPrefs.edit()
             .putString(PIN_HASH_KEY, pinHash)
+            .putString(PIN_SALT_KEY, android.util.Base64.encodeToString(salt, android.util.Base64.DEFAULT))
             .putInt(FAILED_ATTEMPTS_KEY, 0)
             .apply()
         return true
@@ -77,7 +81,9 @@ class SecurityManager(private val context: Context) {
         }
 
         val storedHash = encryptedPrefs.getString(PIN_HASH_KEY, null) ?: return false
-        val inputHash = hashPin(inputPin)
+        val saltBase64 = encryptedPrefs.getString(PIN_SALT_KEY, null)
+        val salt = saltBase64?.let { android.util.Base64.decode(it, android.util.Base64.DEFAULT) } ?: ByteArray(0)
+        val inputHash = hashPinWithSalt(inputPin, salt)
 
         if (inputHash == storedHash) {
             // Reset failed attempts on success
@@ -110,10 +116,12 @@ class SecurityManager(private val context: Context) {
         if (!validatePin(oldPin)) {
             return false
         }
-        
-        val newPinHash = hashPin(newPin)
+
+        val newSalt = generateSalt()
+        val newPinHash = hashPinWithSalt(newPin, newSalt)
         encryptedPrefs.edit()
             .putString(PIN_HASH_KEY, newPinHash)
+            .putString(PIN_SALT_KEY, android.util.Base64.encodeToString(newSalt, android.util.Base64.DEFAULT))
             .apply()
         return true
     }
@@ -156,10 +164,11 @@ class SecurityManager(private val context: Context) {
     }
 
     /**
-     * Hash PIN using SHA-256
+     * Hash PIN using SHA-256 with salt
      */
-    private fun hashPin(pin: String): String {
+    private fun hashPinWithSalt(pin: String, salt: ByteArray): String {
         val digest = MessageDigest.getInstance("SHA-256")
+        digest.update(salt)
         val hash = digest.digest(pin.toByteArray())
         return hash.joinToString("") { "%02x".format(it) }
     }
@@ -236,6 +245,22 @@ class SecurityManager(private val context: Context) {
 
         val secretKey = keyStore.getKey(MASTER_KEY_ALIAS, null) as SecretKey
         return secretKey
+    }
+
+    /**
+     * Check if biometric authentication is enabled
+     */
+    fun isBiometricEnabled(): Boolean {
+        return encryptedPrefs.getBoolean(BIOMETRIC_ENABLED_KEY, false)
+    }
+
+    /**
+     * Enable/disable biometric authentication
+     */
+    fun setBiometricEnabled(enabled: Boolean) {
+        encryptedPrefs.edit()
+            .putBoolean(BIOMETRIC_ENABLED_KEY, enabled)
+            .apply()
     }
 
     /**

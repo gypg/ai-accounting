@@ -12,12 +12,22 @@ import com.example.aiaccounting.data.local.dao.CategoryDao
 import com.example.aiaccounting.data.local.dao.TransactionDao
 import com.example.aiaccounting.data.local.dao.BudgetDao
 import com.example.aiaccounting.data.local.dao.AIConversationDao
+import com.example.aiaccounting.data.local.dao.TransactionTemplateDao
+import com.example.aiaccounting.data.local.dao.ChatSessionDao
+import com.example.aiaccounting.data.local.dao.ChatMessageDao
+import com.example.aiaccounting.data.local.dao.ChatMemoryDao
 import com.example.aiaccounting.data.local.entity.Account
 import com.example.aiaccounting.data.local.entity.Category
 import com.example.aiaccounting.data.local.entity.Transaction
 import com.example.aiaccounting.data.local.entity.Budget
 import com.example.aiaccounting.data.local.entity.AIConversation
+import com.example.aiaccounting.data.local.entity.TransactionTemplate
+import com.example.aiaccounting.data.local.entity.ChatSession
+import com.example.aiaccounting.data.local.entity.ChatMessageEntity
+import com.example.aiaccounting.data.local.entity.ChatMemory
 import com.example.aiaccounting.security.SecurityManager
+import com.example.aiaccounting.data.storage.StorageManager
+import com.example.aiaccounting.data.storage.ExternalSharedPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -31,9 +41,13 @@ import javax.inject.Singleton
         Category::class,
         Transaction::class,
         Budget::class,
-        AIConversation::class
+        AIConversation::class,
+        TransactionTemplate::class,
+        ChatSession::class,
+        ChatMessageEntity::class,
+        ChatMemory::class
     ],
-    version = 1,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -44,6 +58,10 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun transactionDao(): TransactionDao
     abstract fun budgetDao(): BudgetDao
     abstract fun aiConversationDao(): AIConversationDao
+    abstract fun transactionTemplateDao(): TransactionTemplateDao
+    abstract fun chatSessionDao(): ChatSessionDao
+    abstract fun chatMessageDao(): ChatMessageDao
+    abstract fun chatMemoryDao(): ChatMemoryDao
 
     companion object {
         const val DATABASE_NAME = "ai_accounting.db"
@@ -79,14 +97,14 @@ class DatabaseFactory @Inject constructor(
         // Create SQLCipher support factory
         val factory = SupportFactory(passphrase.toByteArray())
 
-        // Build database
+        // Build database with internal storage path (more stable)
         database = androidx.room.Room.databaseBuilder(
             context,
             AppDatabase::class.java,
             AppDatabase.DATABASE_NAME
         )
             .openHelperFactory(factory)
-            .fallbackToDestructiveMigration() // For development only
+            .fallbackToDestructiveMigration() // For development only - will recreate database
             .addCallback(DatabaseCallback())
             .build()
 
@@ -129,21 +147,21 @@ class DatabaseFactory @Inject constructor(
 
     /**
      * Get or create salt for key derivation
+     * 使用外部存储的 SharedPreferences
      */
     private fun getOrCreateSalt(): ByteArray {
         val saltKey = "db_salt"
-        val saltBase64 = context.getSharedPreferences("db_prefs", Context.MODE_PRIVATE)
-            .getString(saltKey, null)
+        val prefs = ExternalSharedPreferences.getInstance(context, "db_prefs")
+        val saltBase64 = prefs.getString(saltKey, null)
 
         if (saltBase64 != null) {
-            return android.util.Base64.decode(saltBase64, android.util.Base64.DEFAULT)
+            return android.util.Base64.decode(saltBase64.toByteArray(), android.util.Base64.DEFAULT)
         }
 
         // Generate new salt
         val salt = securityManager.generateSalt()
         val saltBase64New = android.util.Base64.encodeToString(salt, android.util.Base64.DEFAULT)
-        context.getSharedPreferences("db_prefs", Context.MODE_PRIVATE)
-            .edit()
+        prefs.edit()
             .putString(saltKey, saltBase64New)
             .apply()
 

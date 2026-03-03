@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -13,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.aiaccounting.ui.viewmodel.BudgetViewModel
+import com.example.aiaccounting.ui.viewmodel.BudgetWithDetails
 import com.example.aiaccounting.utils.NumberUtils
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -22,7 +22,7 @@ fun BudgetsScreen(
     viewModel: BudgetViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val budgets by viewModel.budgets.collectAsState()
+    val budgets by viewModel.budgetsWithDetails.collectAsState()
 
     var showAddDialog by remember { mutableStateOf(false) }
 
@@ -32,7 +32,7 @@ fun BudgetsScreen(
                 title = { Text(text = "预算管理") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -92,11 +92,11 @@ fun BudgetsScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(budgets) { budget ->
+                    items(budgets) { budgetWithDetails ->
                         BudgetCard(
-                            budget = budget,
-                            onEdit = { viewModel.editBudget(budget) },
-                            onDelete = { viewModel.deleteBudget(budget.id) }
+                            budgetWithDetails = budgetWithDetails,
+                            onEdit = { viewModel.editBudget(budgetWithDetails.budget) },
+                            onDelete = { viewModel.deleteBudget(budgetWithDetails.budget.id) }
                         )
                     }
                 }
@@ -118,12 +118,13 @@ fun BudgetsScreen(
 
 @Composable
 fun BudgetCard(
-    budget: com.example.aiaccounting.data.local.entity.Budget,
+    budgetWithDetails: BudgetWithDetails,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val budget = budgetWithDetails.budget
     val progress = if (budget.amount > 0) {
-        (budget.spent / budget.amount).toFloat().coerceIn(0f, 1f)
+        (budgetWithDetails.spent / budget.amount).toFloat().coerceIn(0f, 1f)
     } else 0f
 
     val progressColor = when {
@@ -145,7 +146,7 @@ fun BudgetCard(
             ) {
                 Column {
                     Text(
-                        text = budget.categoryName ?: "未分类",
+                        text = budgetWithDetails.categoryName,
                         style = MaterialTheme.typography.titleMedium
                     )
                     Text(
@@ -181,7 +182,7 @@ fun BudgetCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "已用: ${NumberUtils.formatMoney(budget.spent)}",
+                    text = "已用: ${NumberUtils.formatMoney(budgetWithDetails.spent)}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = progressColor
                 )
@@ -266,3 +267,11 @@ fun AddBudgetDialog(
         }
     )
 }
+
+val com.example.aiaccounting.data.local.entity.BudgetPeriod.displayName: String
+    get() = when (this) {
+        com.example.aiaccounting.data.local.entity.BudgetPeriod.DAILY -> "每日"
+        com.example.aiaccounting.data.local.entity.BudgetPeriod.WEEKLY -> "每周"
+        com.example.aiaccounting.data.local.entity.BudgetPeriod.MONTHLY -> "每月"
+        com.example.aiaccounting.data.local.entity.BudgetPeriod.YEARLY -> "每年"
+    }

@@ -8,7 +8,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -22,6 +21,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.aiaccounting.data.local.entity.Category
 import com.example.aiaccounting.data.local.entity.TransactionType
+import com.example.aiaccounting.ui.components.ColorSelector
+import com.example.aiaccounting.ui.components.FlowRow
 import com.example.aiaccounting.ui.viewmodel.CategoryViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -48,7 +49,7 @@ fun CategoriesScreen(
                 title = { Text(text = "分类管理") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -314,8 +315,8 @@ fun SubCategoryItem(
         // 连接线
         Box(
             modifier = Modifier
-                .width = 16.dp
-                .height = 2.dp
+                .width(16.dp)
+                .height(2.dp)
                 .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f))
         )
 
@@ -414,7 +415,8 @@ fun AddCategoryDialog(
                 Text("分类颜色", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                 ColorSelector(
                     selectedColor = selectedColor,
-                    onColorSelected = { selectedColor = it }
+                    onColorSelected = { selectedColor = it },
+                    colors = CategoryColors
                 )
             }
         },
@@ -479,7 +481,8 @@ fun EditCategoryDialog(
                 Text("分类颜色", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                 ColorSelector(
                     selectedColor = selectedColor,
-                    onColorSelected = { selectedColor = it }
+                    onColorSelected = { selectedColor = it },
+                    colors = CategoryColors
                 )
             }
         },
@@ -566,111 +569,6 @@ fun IconSelector(
                     text = icon,
                     fontSize = 20.sp
                 )
-            }
-        }
-    }
-}
-
-@Composable
-fun ColorSelector(
-    selectedColor: String,
-    onColorSelected: (String) -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        CategoryColors.forEach { color ->
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(Color(android.graphics.Color.parseColor(color)))
-                    .clickable { onColorSelected(color) }
-                    .then(
-                        if (selectedColor == color) {
-                            Modifier.border(3.dp, MaterialTheme.colorScheme.primary, CircleShape)
-                        } else Modifier
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                if (selectedColor == color) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-// FlowRow组件（简化版）
-@Composable
-fun FlowRow(
-    modifier: Modifier = Modifier,
-    horizontalArrangement: Arrangement.Horizontal = Arrangement.Start,
-    verticalArrangement: Arrangement.Vertical = Arrangement.Top,
-    content: @Composable () -> Unit
-) {
-    Layout(
-        content = content,
-        modifier = modifier
-    ) { measurables, constraints ->
-        val hGapPx = 8.dp.roundToPx()
-        val vGapPx = 8.dp.roundToPx()
-        
-        val rows = mutableListOf<List<androidx.compose.ui.layout.Placeable>>()
-        val rowWidths = mutableListOf<Int>()
-        val rowHeights = mutableListOf<Int>()
-        
-        var currentRow = mutableListOf<androidx.compose.ui.layout.Placeable>()
-        var currentRowWidth = 0
-        var currentRowHeight = 0
-        
-        measurables.forEach { measurable ->
-            val placeable = measurable.measure(constraints)
-            
-            if (currentRow.isNotEmpty() && currentRowWidth + hGapPx + placeable.width > constraints.maxWidth) {
-                rows.add(currentRow)
-                rowWidths.add(currentRowWidth)
-                rowHeights.add(currentRowHeight)
-                currentRow = mutableListOf()
-                currentRowWidth = 0
-                currentRowHeight = 0
-            }
-            
-            currentRow.add(placeable)
-            currentRowWidth += if (currentRow.size == 1) placeable.width else hGapPx + placeable.width
-            currentRowHeight = maxOf(currentRowHeight, placeable.height)
-        }
-        
-        if (currentRow.isNotEmpty()) {
-            rows.add(currentRow)
-            rowWidths.add(currentRowWidth)
-            rowHeights.add(currentRowHeight)
-        }
-        
-        val totalHeight = rowHeights.sum() + (rowHeights.size - 1) * vGapPx
-        
-        layout(constraints.maxWidth, totalHeight) {
-            var y = 0
-            rows.forEachIndexed { rowIndex, row ->
-                var x = when (horizontalArrangement) {
-                    Arrangement.Start, Arrangement.SpaceEvenly, Arrangement.SpaceBetween, Arrangement.SpaceAround -> 0
-                    Arrangement.End -> constraints.maxWidth - rowWidths[rowIndex]
-                    Arrangement.Center -> (constraints.maxWidth - rowWidths[rowIndex]) / 2
-                    else -> 0
-                }
-                
-                row.forEach { placeable ->
-                    placeable.placeRelative(x, y)
-                    x += placeable.width + hGapPx
-                }
-                
-                y += rowHeights[rowIndex] + vGapPx
             }
         }
     }

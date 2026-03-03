@@ -23,20 +23,16 @@
 
 ### ✅ P0 - 核心UI (100%)
 - [x] MainActivity.kt - 主活动
-- [x] MainScreen.kt - 主屏幕框架
 - [x] HomeScreen.kt - 首页/明细列表
-- [x] TransactionItem.kt - 交易列表项
-- [x] AddTransactionScreen.kt - 添加/编辑交易
-- [x] BottomNavBar.kt - 底部导航栏
+- [x] AddTransactionScreen.kt - 添加交易
+- [x] EditTransactionScreen.kt - 编辑交易
 
 ### ✅ P1 - 账户管理 (100%)
-- [x] AccountsScreen.kt - 账户列表
-- [x] AddEditAccountScreen.kt - 添加/编辑账户
+- [x] AccountsScreen.kt - 账户列表与管理
 - [x] AccountViewModel.kt - 账户逻辑
 
 ### ✅ P1 - 分类管理 (100%)
-- [x] CategoriesScreen.kt - 分类列表
-- [x] AddEditCategoryScreen.kt - 添加/编辑分类
+- [x] CategoriesScreen.kt - 分类列表与管理
 - [x] CategoryViewModel.kt - 分类逻辑
 
 ### ✅ P1 - 统计功能 (100%)
@@ -47,7 +43,6 @@
 
 ### ✅ P1 - AI功能 (100%)
 - [x] NaturalLanguageParser.kt - 自然语言解析器
-- [x] ParsedTransaction.kt - 解析结果模型
 - [x] AIAssistantViewModel.kt - AI助手逻辑
 - [x] AIAssistantScreen.kt - AI助手界面
 - [x] 金额提取算法
@@ -56,11 +51,7 @@
 - [x] 置信度计算
 
 ### ✅ P1 - 设置功能 (100%)
-- [x] SettingsScreen.kt - 设置主界面
-- [x] SecuritySettingsScreen.kt - 安全设置
-- [x] AISettingsScreen.kt - AI配置
-- [x] BackupSettingsScreen.kt - 备份设置
-- [x] AboutScreen.kt - 关于页面
+- [x] SettingsScreen.kt - 设置主界面（包含安全、AI、备份、关于等设置）
 
 ### ✅ P2 - 数据备份 (100%)
 - [x] BackupService.kt - 备份服务

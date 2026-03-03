@@ -1,57 +1,63 @@
 package com.example.aiaccounting.ui.screens
 
-import android.view.ViewGroup
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.aiaccounting.ui.components.charts.PieChart
+import com.example.aiaccounting.ui.components.charts.TrendChart
+import com.example.aiaccounting.ui.components.charts.BarChart
 import com.example.aiaccounting.ui.viewmodel.StatisticsViewModel
 import com.example.aiaccounting.utils.NumberUtils
-import com.github.mikephil.charting.charts.BarChart
-import com.github.mikephil.charting.charts.LineChart
-import com.github.mikephil.charting.charts.PieChart
-import com.github.mikephil.charting.components.XAxis
-import com.github.mikephil.charting.data.*
-import com.github.mikephil.charting.formatter.PercentFormatter
-import com.github.mikephil.charting.formatter.ValueFormatter
-import com.github.mikephil.charting.utils.ColorTemplate
-import java.text.SimpleDateFormat
-import java.util.*
 
+/**
+ * 统计页面 - 手机适配版
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StatisticsScreen(
-    onNavigateBack: () -> Unit,
     viewModel: StatisticsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var selectedTab by remember { mutableStateOf(0) }
-    val tabs = listOf("概览", "分类", "趋势")
+    val statistics by viewModel.statistics.collectAsState()
+    var showDatePickerDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(text = "统计") },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                title = {
+                    Text(
+                        text = "统计",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                actions = {
+                    IconButton(onClick = { showDatePickerDialog = true }) {
+                        Icon(Icons.Default.FilterList, contentDescription = "筛选")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
+                    containerColor = Color.White
                 )
             )
         }
@@ -60,651 +66,1126 @@ fun StatisticsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .verticalScroll(rememberScrollState())
         ) {
-            // Tab切换
-            TabRow(selectedTabIndex = selectedTab) {
-                tabs.forEachIndexed { index, title ->
-                    Tab(
-                        selected = selectedTab == index,
-                        onClick = { selectedTab = index },
-                        text = { Text(title) }
+            // 显示当前选择的时间范围
+            val timeDisplayText = getTimeDisplayText(uiState.timeFilter)
+            if (timeDisplayText.isNotEmpty()) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
                     )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "统计时间：$timeDisplayText",
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Icon(
+                            imageVector = Icons.Default.CalendarToday,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
 
-            // 内容区域
-            when (selectedTab) {
-                0 -> OverviewTab(uiState = uiState)
-                1 -> CategoryTab(uiState = uiState)
-                2 -> TrendTab(uiState = uiState)
-            }
-        }
-    }
-}
-
-@Composable
-fun OverviewTab(uiState: StatisticsUiState) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // 月度概览卡片
-        MonthlyOverviewCard(uiState)
-
-        // 收支对比饼图
-        if (uiState.monthlyIncome > 0 || uiState.monthlyExpense > 0) {
-            IncomeExpensePieChart(uiState)
-        }
-
-        // 最近6个月收支对比
-        if (uiState.monthlyTrend.isNotEmpty()) {
-            MonthlyTrendChart(uiState.monthlyTrend)
-        }
-    }
-}
-
-@Composable
-fun MonthlyOverviewCard(uiState: StatisticsUiState) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "本月概览",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // 结余
-            val balance = uiState.monthlyIncome - uiState.monthlyExpense
-            Text(
-                text = NumberUtils.formatMoney(balance),
-                fontSize = 36.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (balance >= 0) Color(0xFF4CAF50) else Color(0xFFF44336)
-            )
-
-            Text(
-                text = "结余",
-                fontSize = 14.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-            )
-
-            Spacer(modifier = Modifier.height(20.dp))
-
+            // 总收入和总支出卡片
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = NumberUtils.formatMoney(uiState.monthlyIncome),
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF4CAF50)
-                    )
-                    Text(
-                        text = "收入",
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                }
+                StatCard(
+                    title = "总收入",
+                    amount = statistics.totalIncome,
+                    color = Color(0xFF4CAF50),
+                    modifier = Modifier.weight(1f)
+                )
+                StatCard(
+                    title = "总支出",
+                    amount = statistics.totalExpense,
+                    color = Color(0xFFF44336),
+                    modifier = Modifier.weight(1f)
+                )
+            }
 
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            // 日期选择弹窗
+            if (showDatePickerDialog) {
+                DatePickerDialog(
+                    timeFilter = uiState.timeFilter,
+                    onTimeFilterSelected = { 
+                        viewModel.setTimeFilter(it)
+                        showDatePickerDialog = false
+                    },
+                    onDismiss = { showDatePickerDialog = false }
+                )
+            }
+
+            // 收入/支出切换标签
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+            ) {
+                TabButton(
+                    text = "收入",
+                    selected = uiState.selectedTab == "income",
+                    onClick = { viewModel.setSelectedTab("income") },
+                    modifier = Modifier.weight(1f)
+                )
+                TabButton(
+                    text = "支出",
+                    selected = uiState.selectedTab == "expense",
+                    onClick = { viewModel.setSelectedTab("expense") },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 趋势图表
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
                     Text(
-                        text = NumberUtils.formatMoney(uiState.monthlyExpense),
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFFF44336)
+                        text = "收支趋势",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium
                     )
-                    Text(
-                        text = "支出",
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (statistics.monthlyTrend.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "暂无趋势数据",
+                                color = Color.Gray
+                            )
+                        }
+                    } else {
+                        TrendChart(
+                            data = statistics.monthlyTrend,
+                            modifier = Modifier.fillMaxWidth(),
+                            showIncome = true,
+                            showExpense = true
+                        )
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 预算使用率
-            if (uiState.monthlyBudget > 0) {
-                val budgetUsage = (uiState.monthlyExpense / uiState.monthlyBudget * 100).toInt()
-                LinearProgressIndicator(
-                    progress = (budgetUsage / 100f).coerceIn(0f, 1f),
-                    modifier = Modifier.fillMaxWidth(),
-                    color = if (budgetUsage > 100) Color(0xFFF44336) else MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "预算使用: $budgetUsage%",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
+            // 饼图 - 分类占比
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = if (uiState.selectedTab == "income") "收入分类" else "支出分类",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (statistics.categoryStats.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "暂无分类数据",
+                                color = Color.Gray
+                            )
+                        }
+                    } else {
+                        PieChart(
+                            data = statistics.categoryStats.take(6),
+                            modifier = Modifier.fillMaxWidth(),
+                            showLabels = true,
+                            holeRadius = 0.5f
+                        )
+                    }
+                }
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 分类明细
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = "分类明细",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (statistics.categoryStats.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(100.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "暂无分类数据",
+                                color = Color.Gray
+                            )
+                        }
+                    } else {
+                        statistics.categoryStats.forEach { categoryStat ->
+                            CategoryStatRow(
+                                name = categoryStat.name,
+                                amount = categoryStat.amount,
+                                percentage = categoryStat.percentage,
+                                color = categoryStat.color
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
 
 @Composable
-fun IncomeExpensePieChart(uiState: StatisticsUiState) {
+fun StatCard(
+    title: String,
+    amount: Double,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
             modifier = Modifier.padding(16.dp)
         ) {
             Text(
-                text = "收支占比",
-                fontSize = 16.sp,
+                text = title,
+                fontSize = 14.sp,
+                color = Color.Gray
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = NumberUtils.formatMoney(amount),
+                fontSize = 20.sp,
+                color = color,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
+fun TabButton(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (selected) Color(0xFF2196F3) else Color(0xFFF5F5F5))
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            fontSize = 14.sp,
+            color = if (selected) Color.White else Color.Black
+        )
+    }
+}
+
+@Composable
+fun FilterPanel(
+    selectedTab: String,
+    onTabSelected: (String) -> Unit,
+    timeFilter: String,
+    onTimeFilterSelected: (String) -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            // 时间筛选 - 使用下拉选择器
+            Text(
+                text = "时间范围",
+                fontSize = 14.sp,
                 fontWeight = FontWeight.Medium
             )
+            Spacer(modifier = Modifier.height(12.dp))
 
+            // 使用下拉选择器选择年月日
+            DateRangeSelector(
+                timeFilter = timeFilter,
+                onTimeFilterSelected = onTimeFilterSelected
+            )
+            
             Spacer(modifier = Modifier.height(16.dp))
-
-            AndroidView(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(250.dp),
-                factory = { context ->
-                    PieChart(context).apply {
-                        layoutParams = ViewGroup.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT
-                        )
-                        description.isEnabled = false
-                        isRotationEnabled = true
-                        isHighlightPerTapEnabled = true
-                        legend.isEnabled = true
-                        legend.textSize = 12f
-                    }
-                },
-                update = { chart ->
-                    val entries = listOf(
-                        PieEntry(uiState.monthlyIncome.toFloat(), "收入"),
-                        PieEntry(uiState.monthlyExpense.toFloat(), "支出")
+            
+            // 快速筛选
+            Text(
+                text = "快速筛选",
+                fontSize = 12.sp,
+                color = Color.Gray
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            val quickFilters = listOf(
+                "本月" to "current",
+                "上月" to "last",
+                "近3月" to "3months",
+                "近6月" to "6months",
+                "近1年" to "1year",
+                "全部" to "all"
+            )
+            
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                quickFilters.forEach { (label, value) ->
+                    FilterChip(
+                        label = label,
+                        selected = timeFilter == value,
+                        onClick = { onTimeFilterSelected(value) }
                     )
+                }
+            }
+        }
+    }
+}
 
-                    val dataSet = PieDataSet(entries, "").apply {
-                        colors = listOf(
-                            ColorTemplate.rgb("#4CAF50"),  // 绿色 - 收入
-                            ColorTemplate.rgb("#F44336")   // 红色 - 支出
-                        )
-                        valueTextSize = 14f
-                        valueTextColor = android.graphics.Color.WHITE
-                        valueFormatter = object : ValueFormatter() {
-                            override fun getFormattedValue(value: Float): String {
-                                return "¥${value.toInt()}"
+@Composable
+fun DateRangeSelector(
+    timeFilter: String,
+    onTimeFilterSelected: (String) -> Unit
+) {
+    val calendar = java.util.Calendar.getInstance()
+    val currentYear = calendar.get(java.util.Calendar.YEAR)
+    val currentMonth = calendar.get(java.util.Calendar.MONTH) + 1
+    
+    // 解析当前筛选值
+    val (selectedYear, selectedMonth, selectedDay) = when {
+        timeFilter.matches(Regex("\\d{4}")) -> {
+            Triple(timeFilter.toInt(), null, null)
+        }
+        timeFilter.matches(Regex("\\d{4}-\\d{2}")) -> {
+            val parts = timeFilter.split("-")
+            Triple(parts[0].toInt(), parts[1].toInt(), null)
+        }
+        timeFilter.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) -> {
+            val parts = timeFilter.split("-")
+            Triple(parts[0].toInt(), parts[1].toInt(), parts[2].toInt())
+        }
+        timeFilter == "current" -> Triple(currentYear, currentMonth, null)
+        else -> Triple(currentYear, null, null)
+    }
+    
+    // 年份列表（最近10年）
+    val years = (currentYear downTo currentYear - 9).toList()
+    
+    // 月份列表
+    val months = (1..12).toList()
+    
+    // 日期列表
+    val daysInMonth = if (selectedYear != null && selectedMonth != null) {
+        java.util.Calendar.getInstance().apply {
+            set(selectedYear, selectedMonth - 1, 1)
+        }.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
+    } else 31
+    val days = (1..daysInMonth).toList()
+    
+    Column {
+        // 年份选择 - 抽屉式列表
+        Text(
+            text = "年份",
+            fontSize = 12.sp,
+            color = Color.Gray,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            years.forEach { year ->
+                val isSelected = selectedYear == year
+                YearMonthDayItem(
+                    text = "${year}年",
+                    isSelected = isSelected,
+                    onClick = { 
+                        onTimeFilterSelected(year.toString())
+                    }
+                )
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // 月份选择 - 抽屉式列表
+        Text(
+            text = "月份",
+            fontSize = 12.sp,
+            color = Color.Gray,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            months.forEach { month ->
+                val isSelected = selectedMonth == month
+                YearMonthDayItem(
+                    text = "${month}月",
+                    isSelected = isSelected,
+                    onClick = { 
+                        selectedYear?.let { year ->
+                            onTimeFilterSelected(String.format("%04d-%02d", year, month))
+                        }
+                    }
+                )
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // 日期选择 - 抽屉式列表（可选）
+        Text(
+            text = "日期",
+            fontSize = 12.sp,
+            color = Color.Gray,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        
+        // 全部日期选项
+        YearMonthDayItem(
+            text = "全部日期",
+            isSelected = selectedMonth != null && selectedDay == null,
+            onClick = { 
+                selectedYear?.let { year ->
+                    selectedMonth?.let { month ->
+                        onTimeFilterSelected(String.format("%04d-%02d", year, month))
+                    }
+                }
+            }
+        )
+        
+        Spacer(modifier = Modifier.height(6.dp))
+        
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            days.forEach { day ->
+                val isSelected = selectedDay == day
+                YearMonthDayItem(
+                    text = "${day}日",
+                    isSelected = isSelected,
+                    onClick = { 
+                        selectedYear?.let { year ->
+                            selectedMonth?.let { month ->
+                                onTimeFilterSelected(String.format("%04d-%02d-%02d", year, month, day))
                             }
                         }
                     }
-
-                    chart.data = PieData(dataSet)
-                    chart.invalidate()
-                }
-            )
+                )
+            }
         }
-    }
-}
-
-@Composable
-fun MonthlyTrendChart(trendData: List<MonthlyData>) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
+        
+        // 显示当前选择
+        if (selectedYear != null) {
+            Spacer(modifier = Modifier.height(16.dp))
+            val displayText = when {
+                selectedDay != null && selectedMonth != null -> 
+                    String.format("已选择：%04d年%02d月%02d日", selectedYear, selectedMonth, selectedDay)
+                selectedMonth != null -> 
+                    String.format("已选择：%04d年%02d月", selectedYear, selectedMonth)
+                else -> 
+                    "已选择：${selectedYear}年"
+            }
             Text(
-                text = "收支趋势",
-                fontSize = 16.sp,
+                text = displayText,
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Medium
             )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            AndroidView(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(250.dp),
-                factory = { context ->
-                    BarChart(context).apply {
-                        layoutParams = ViewGroup.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT
-                        )
-                        description.isEnabled = false
-                        legend.isEnabled = true
-                        legend.textSize = 12f
-
-                        xAxis.apply {
-                            position = XAxis.XAxisPosition.BOTTOM
-                            granularity = 1f
-                            setDrawGridLines(false)
-                        }
-
-                        axisLeft.apply {
-                            setDrawGridLines(true)
-                            axisMinimum = 0f
-                        }
-
-                        axisRight.isEnabled = false
-                    }
-                },
-                update = { chart ->
-                    val incomeEntries = trendData.mapIndexed { index, data ->
-                        BarEntry(index.toFloat(), data.income.toFloat())
-                    }
-
-                    val expenseEntries = trendData.mapIndexed { index, data ->
-                        BarEntry(index.toFloat(), data.expense.toFloat())
-                    }
-
-                    val incomeDataSet = BarDataSet(incomeEntries, "收入").apply {
-                        color = ColorTemplate.rgb("#4CAF50")
-                        valueTextSize = 10f
-                    }
-
-                    val expenseDataSet = BarDataSet(expenseEntries, "支出").apply {
-                        color = ColorTemplate.rgb("#F44336")
-                        valueTextSize = 10f
-                    }
-
-                    chart.xAxis.valueFormatter = object : ValueFormatter() {
-                        override fun getFormattedValue(value: Float): String {
-                            val index = value.toInt()
-                            return if (index in trendData.indices) {
-                                trendData[index].month
-                            } else ""
-                        }
-                    }
-
-                    chart.data = BarData(incomeDataSet, expenseDataSet).apply {
-                        barWidth = 0.3f
-                    }
-                    chart.groupBars(0f, 0.4f, 0f)
-                    chart.invalidate()
-                }
-            )
         }
     }
 }
 
 @Composable
-fun CategoryTab(uiState: StatisticsUiState) {
-    Column(
+fun YearMonthDayItem(
+    text: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Box(
         modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(
+                if (isSelected) MaterialTheme.colorScheme.primary 
+                else Color(0xFFF5F5F5)
+            )
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp, horizontal = 16.dp),
+        contentAlignment = Alignment.Center
     ) {
-        // 支出分类饼图
-        if (uiState.expenseByCategory.isNotEmpty()) {
-            CategoryPieChart(
-                title = "支出分类",
-                data = uiState.expenseByCategory,
-                colors = ColorTemplate.MATERIAL_COLORS.toList()
-            )
-        }
-
-        // 收入分类饼图
-        if (uiState.incomeByCategory.isNotEmpty()) {
-            CategoryPieChart(
-                title = "收入分类",
-                data = uiState.incomeByCategory,
-                colors = ColorTemplate.COLORFUL_COLORS.toList()
-            )
-        }
-
-        // 分类详情列表
-        if (uiState.expenseByCategory.isNotEmpty()) {
-            CategoryDetailList(
-                title = "支出详情",
-                data = uiState.expenseByCategory,
-                total = uiState.monthlyExpense
-            )
-        }
+        Text(
+            text = text,
+            fontSize = 14.sp,
+            color = if (isSelected) Color.White else Color.Black,
+            fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
+        )
     }
 }
 
 @Composable
-fun CategoryPieChart(
-    title: String,
-    data: List<CategoryStat>,
-    colors: List<Int>
+fun CategoryStatRow(
+    name: String,
+    amount: Double,
+    percentage: Float,
+    color: String
 ) {
-    Card(
+    Row(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Text(
-                text = title,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium
-            )
+        // 颜色指示器
+        Box(
+            modifier = Modifier
+                .size(12.dp)
+                .background(
+                    try {
+                        Color(android.graphics.Color.parseColor(color))
+                    } catch (e: Exception) {
+                        Color.Gray
+                    },
+                    RoundedCornerShape(2.dp)
+                )
+        )
 
-            Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.width(12.dp))
 
-            AndroidView(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(250.dp),
-                factory = { context ->
-                    PieChart(context).apply {
-                        layoutParams = ViewGroup.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT
-                        )
-                        description.isEnabled = false
-                        isRotationEnabled = true
-                        isHighlightPerTapEnabled = true
-                        legend.isEnabled = true
-                        legend.textSize = 10f
-                        legend.isWordWrapEnabled = true
-                    }
-                },
-                update = { chart ->
-                    val entries = data.map { stat ->
-                        PieEntry(stat.amount.toFloat(), stat.name)
-                    }
+        // 分类名称
+        Text(
+            text = name,
+            fontSize = 14.sp,
+            modifier = Modifier.weight(1f)
+        )
 
-                    val dataSet = PieDataSet(entries, "").apply {
-                        this.colors = colors.take(data.size)
-                        valueTextSize = 12f
-                        valueTextColor = android.graphics.Color.WHITE
-                        valueFormatter = PercentFormatter(chart)
-                    }
+        // 金额
+        Text(
+            text = NumberUtils.formatMoney(amount),
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium
+        )
 
-                    chart.data = PieData(dataSet)
-                    chart.invalidate()
+        Spacer(modifier = Modifier.width(12.dp))
+
+        // 百分比
+        Text(
+            text = "${(percentage * 100).toInt()}%",
+            fontSize = 12.sp,
+            color = Color.Gray
+        )
+    }
+}
+
+@Composable
+fun FlowRow(
+    modifier: Modifier = Modifier,
+    horizontalArrangement: Arrangement.Horizontal = Arrangement.Start,
+    verticalArrangement: Arrangement.Vertical = Arrangement.Top,
+    content: @Composable () -> Unit
+) {
+    androidx.compose.ui.layout.Layout(
+        content = content,
+        modifier = modifier
+    ) { measurables, constraints ->
+        val hGapPx = 8.dp.roundToPx()
+        val vGapPx = 8.dp.roundToPx()
+
+        val rows = mutableListOf<List<androidx.compose.ui.layout.Placeable>>()
+        val rowWidths = mutableListOf<Int>()
+        val rowHeights = mutableListOf<Int>()
+
+        var currentRow = mutableListOf<androidx.compose.ui.layout.Placeable>()
+        var currentRowWidth = 0
+        var currentRowHeight = 0
+
+        measurables.forEach { measurable ->
+            val placeable = measurable.measure(constraints)
+
+            if (currentRow.isNotEmpty() && currentRowWidth + hGapPx + placeable.width > constraints.maxWidth) {
+                rows.add(currentRow)
+                rowWidths.add(currentRowWidth)
+                rowHeights.add(currentRowHeight)
+                currentRow = mutableListOf()
+                currentRowWidth = 0
+                currentRowHeight = 0
+            }
+
+            currentRow.add(placeable)
+            currentRowWidth += if (currentRow.size == 1) placeable.width else hGapPx + placeable.width
+            currentRowHeight = maxOf(currentRowHeight, placeable.height)
+        }
+
+        if (currentRow.isNotEmpty()) {
+            rows.add(currentRow)
+            rowWidths.add(currentRowWidth)
+            rowHeights.add(currentRowHeight)
+        }
+
+        val height = rowHeights.sum() + (rowHeights.size - 1).coerceAtLeast(0) * vGapPx
+
+        layout(constraints.maxWidth, height) {
+            var y = 0
+            rows.forEachIndexed { rowIndex, row ->
+                var x = when (horizontalArrangement) {
+                    Arrangement.Start, Arrangement.SpaceBetween -> 0
+                    Arrangement.End -> constraints.maxWidth - rowWidths[rowIndex]
+                    Arrangement.Center -> (constraints.maxWidth - rowWidths[rowIndex]) / 2
+                    else -> 0
                 }
-            )
+
+                row.forEach { placeable ->
+                    placeable.placeRelative(x, y)
+                    x += placeable.width + hGapPx
+                }
+                y += rowHeights[rowIndex] + vGapPx
+            }
         }
     }
 }
 
+/**
+ * 获取时间显示文本
+ */
+fun getTimeDisplayText(timeFilter: String): String {
+    return when {
+        timeFilter.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) -> {
+            val parts = timeFilter.split("-")
+            "${parts[0]}年${parts[1]}月${parts[2]}日"
+        }
+        timeFilter.matches(Regex("\\d{4}-\\d{2}")) -> {
+            val parts = timeFilter.split("-")
+            "${parts[0]}年${parts[1]}月"
+        }
+        timeFilter.matches(Regex("\\d{4}")) -> {
+            "${timeFilter}年"
+        }
+        timeFilter == "current" -> "本月"
+        timeFilter == "last" -> "上月"
+        timeFilter == "3months" -> "近3个月"
+        timeFilter == "6months" -> "近6个月"
+        timeFilter == "1year" -> "近1年"
+        timeFilter == "all" -> "全部"
+        else -> ""
+    }
+}
+
+/**
+ * 日期选择弹窗 - 毛玻璃背景，中间方框
+ */
 @Composable
-fun CategoryDetailList(
-    title: String,
-    data: List<CategoryStat>,
-    total: Double
+fun DatePickerDialog(
+    timeFilter: String,
+    onTimeFilterSelected: (String) -> Unit,
+    onDismiss: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    val calendar = java.util.Calendar.getInstance()
+    val currentYear = calendar.get(java.util.Calendar.YEAR)
+    val currentMonth = calendar.get(java.util.Calendar.MONTH) + 1
+
+    // 内部状态，不立即应用到外部
+    var tempYear by remember { mutableStateOf<Int?>(null) }
+    var tempMonth by remember { mutableStateOf<Int?>(null) }
+    var tempDay by remember { mutableStateOf<Int?>(null) }
+    
+    // 当前步骤：0=年, 1=月, 2=日
+    var currentStep by remember { mutableStateOf(0) }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true
+        )
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.5f))
+                .clickable(onClick = onDismiss),
+            contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = title,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            data.forEach { stat ->
-                val percentage = if (total > 0) (stat.amount / total * 100).toInt() else 0
-
-                Row(
+            // 中间方框
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth(0.85f)
+                    .wrapContentHeight()
+                    .padding(16.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color.White
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+            ) {
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // 颜色指示器
-                    Box(
-                        modifier = Modifier
-                            .size(12.dp)
-                            .background(
-                                color = Color(stat.color),
-                                shape = MaterialTheme.shapes.small
-                            )
-                    )
-
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    // 分类名称
+                    // 标题
                     Text(
-                        text = stat.name,
-                        fontSize = 14.sp,
-                        modifier = Modifier.weight(1f)
+                        text = "选择日期查看",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
                     )
 
-                    // 金额和百分比
-                    Column(horizontalAlignment = Alignment.End) {
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // 步骤指示器（可点击切换）
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        StepIndicator(
+                            text = "年",
+                            isActive = currentStep >= 0,
+                            isSelected = tempYear != null,
+                            onClick = { 
+                                tempYear = null
+                                tempMonth = null
+                                tempDay = null
+                                currentStep = 0 
+                            }
+                        )
+                        StepLine(isActive = currentStep >= 1)
+                        StepIndicator(
+                            text = "月",
+                            isActive = currentStep >= 1,
+                            isSelected = tempMonth != null,
+                            onClick = { 
+                                if (tempYear != null) {
+                                    tempMonth = null
+                                    tempDay = null
+                                    currentStep = 1 
+                                }
+                            }
+                        )
+                        StepLine(isActive = currentStep >= 2)
+                        StepIndicator(
+                            text = "日",
+                            isActive = currentStep >= 2,
+                            isSelected = tempDay != null,
+                            onClick = { 
+                                if (tempYear != null && tempMonth != null) {
+                                    tempDay = null
+                                    currentStep = 2 
+                                }
+                            }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    // 显示当前选择
+                    if (tempYear != null) {
+                        val displayText = when {
+                            tempDay != null && tempMonth != null -> 
+                                String.format("%04d年%02d月%02d日", tempYear, tempMonth, tempDay)
+                            tempMonth != null -> 
+                                String.format("%04d年%02d月", tempYear, tempMonth)
+                            else -> 
+                                "${tempYear}年"
+                        }
                         Text(
-                            text = NumberUtils.formatMoney(stat.amount),
+                            text = displayText,
                             fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Medium
                         )
-                        Text(
-                            text = "$percentage%",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+
+                    // 根据当前步骤显示不同内容
+                    when (currentStep) {
+                        0 -> YearSelector(
+                            selectedYear = tempYear,
+                            currentYear = currentYear,
+                            onYearSelected = { year ->
+                                tempYear = year
+                                currentStep = 1
+                            }
+                        )
+                        1 -> MonthSelector(
+                            selectedYear = tempYear ?: currentYear,
+                            selectedMonth = tempMonth,
+                            onMonthSelected = { year, month ->
+                                tempMonth = month
+                                currentStep = 2
+                            },
+                            onBack = { 
+                                tempYear = null
+                                currentStep = 0 
+                            }
+                        )
+                        2 -> DaySelector(
+                            selectedYear = tempYear ?: currentYear,
+                            selectedMonth = tempMonth ?: 1,
+                            selectedDay = tempDay,
+                            onDaySelected = { year, month, day ->
+                                tempDay = day
+                                // 选择了具体日期，应用并关闭
+                                onTimeFilterSelected(String.format("%04d-%02d-%02d", year, month, day))
+                            },
+                            onBack = { 
+                                tempMonth = null
+                                currentStep = 1 
+                            },
+                            onSelectAllDays = { year, month ->
+                                // 选择全部日期，应用年月并关闭
+                                onTimeFilterSelected(String.format("%04d-%02d", year, month))
+                            }
                         )
                     }
-                }
 
-                if (stat != data.last()) {
-                    Divider(modifier = Modifier.padding(vertical = 4.dp))
-                }
-            }
-        }
-    }
-}
+                    Spacer(modifier = Modifier.height(16.dp))
 
-@Composable
-fun TrendTab(uiState: StatisticsUiState) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // 年度趋势折线图
-        if (uiState.yearlyTrend.isNotEmpty()) {
-            YearlyTrendChart(uiState.yearlyTrend)
-        }
-
-        // 月度对比
-        if (uiState.monthlyComparison.isNotEmpty()) {
-            MonthlyComparisonCard(uiState.monthlyComparison)
-        }
-    }
-}
-
-@Composable
-fun YearlyTrendChart(trendData: List<MonthlyData>) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Text(
-                text = "年度收支趋势",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            AndroidView(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(280.dp),
-                factory = { context ->
-                    LineChart(context).apply {
-                        layoutParams = ViewGroup.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT
-                        )
-                        description.isEnabled = false
-                        legend.isEnabled = true
-                        legend.textSize = 12f
-
-                        xAxis.apply {
-                            position = XAxis.XAxisPosition.BOTTOM
-                            granularity = 1f
-                            setDrawGridLines(false)
-                        }
-
-                        axisLeft.apply {
-                            setDrawGridLines(true)
-                        }
-
-                        axisRight.isEnabled = false
-                    }
-                },
-                update = { chart ->
-                    val incomeEntries = trendData.mapIndexed { index, data ->
-                        Entry(index.toFloat(), data.income.toFloat())
-                    }
-
-                    val expenseEntries = trendData.mapIndexed { index, data ->
-                        Entry(index.toFloat(), data.expense.toFloat())
-                    }
-
-                    val balanceEntries = trendData.mapIndexed { index, data ->
-                        Entry(index.toFloat(), (data.income - data.expense).toFloat())
-                    }
-
-                    val incomeDataSet = LineDataSet(incomeEntries, "收入").apply {
-                        color = ColorTemplate.rgb("#4CAF50")
-                        setDrawCircles(true)
-                        setDrawValues(false)
-                        lineWidth = 2f
-                    }
-
-                    val expenseDataSet = LineDataSet(expenseEntries, "支出").apply {
-                        color = ColorTemplate.rgb("#F44336")
-                        setDrawCircles(true)
-                        setDrawValues(false)
-                        lineWidth = 2f
-                    }
-
-                    val balanceDataSet = LineDataSet(balanceEntries, "结余").apply {
-                        color = ColorTemplate.rgb("#2196F3")
-                        setDrawCircles(true)
-                        setDrawValues(false)
-                        lineWidth = 2f
-                    }
-
-                    chart.xAxis.valueFormatter = object : ValueFormatter() {
-                        override fun getFormattedValue(value: Float): String {
-                            val index = value.toInt()
-                            return if (index in trendData.indices) {
-                                trendData[index].month
-                            } else ""
-                        }
-                    }
-
-                    chart.data = LineData(incomeDataSet, expenseDataSet, balanceDataSet)
-                    chart.invalidate()
-                }
-            )
-        }
-    }
-}
-
-@Composable
-fun MonthlyComparisonCard(comparisonData: List<MonthlyComparison>) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Text(
-                text = "月度对比",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            comparisonData.forEach { data ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = data.month,
-                        fontSize = 14.sp
-                    )
-
+                    // 按钮行
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
-                        Text(
-                            text = "+${NumberUtils.formatMoney(data.income)}",
-                            fontSize = 14.sp,
-                            color = Color(0xFF4CAF50)
-                        )
-                        Text(
-                            text = "-${NumberUtils.formatMoney(data.expense)}",
-                            fontSize = 14.sp,
-                            color = Color(0xFFF44336)
-                        )
+                        // 取消按钮
+                        TextButton(onClick = onDismiss) {
+                            Text("取消")
+                        }
+                        
+                        // 确定按钮（根据选择状态显示不同文字）
+                        Button(
+                            onClick = {
+                                when {
+                                    tempDay != null && tempMonth != null && tempYear != null ->
+                                        onTimeFilterSelected(String.format("%04d-%02d-%02d", tempYear, tempMonth, tempDay))
+                                    tempMonth != null && tempYear != null ->
+                                        onTimeFilterSelected(String.format("%04d-%02d", tempYear, tempMonth))
+                                    tempYear != null ->
+                                        onTimeFilterSelected(tempYear.toString())
+                                }
+                            },
+                            enabled = tempYear != null
+                        ) {
+                            Text(
+                                when {
+                                    tempDay != null -> "确定选择"
+                                    tempMonth != null -> "选择全部日期"
+                                    tempYear != null -> "选择全部月份"
+                                    else -> "确定"
+                                }
+                            )
+                        }
                     }
-                }
-
-                if (data != comparisonData.last()) {
-                    Divider(modifier = Modifier.padding(vertical = 4.dp))
                 }
             }
         }
     }
 }
 
-// 数据类
-data class StatisticsUiState(
-    val monthlyIncome: Double = 0.0,
-    val monthlyExpense: Double = 0.0,
-    val monthlyBudget: Double = 0.0,
-    val expenseByCategory: List<CategoryStat> = emptyList(),
-    val incomeByCategory: List<CategoryStat> = emptyList(),
-    val monthlyTrend: List<MonthlyData> = emptyList(),
-    val yearlyTrend: List<MonthlyData> = emptyList(),
-    val monthlyComparison: List<MonthlyComparison> = emptyList()
-)
+@Composable
+fun StepIndicator(
+    text: String,
+    isActive: Boolean,
+    isSelected: Boolean,
+    onClick: () -> Unit = {}
+) {
+    Box(
+        modifier = Modifier
+            .size(32.dp)
+            .clip(CircleShape)
+            .background(
+                when {
+                    isSelected -> MaterialTheme.colorScheme.primary
+                    isActive -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                    else -> Color(0xFFE0E0E0)
+                }
+            )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            fontSize = 14.sp,
+            color = if (isSelected || isActive) Color.White else Color.Gray,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
 
-data class CategoryStat(
-    val name: String,
-    val amount: Double,
-    val color: Int
-)
+@Composable
+fun StepLine(isActive: Boolean) {
+    Box(
+        modifier = Modifier
+            .width(40.dp)
+            .height(2.dp)
+            .background(
+                if (isActive) MaterialTheme.colorScheme.primary
+                else Color(0xFFE0E0E0)
+            )
+    )
+}
 
-data class MonthlyData(
-    val month: String,
-    val income: Double,
-    val expense: Double
-)
+@Composable
+fun YearSelector(
+    selectedYear: Int?,
+    currentYear: Int,
+    onYearSelected: (Int) -> Unit
+) {
+    val years = (currentYear downTo currentYear - 9).toList()
 
-data class MonthlyComparison(
-    val month: String,
-    val income: Double,
-    val expense: Double
-)
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "请选择年份",
+            fontSize = 14.sp,
+            color = Color.Gray,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(280.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(years) { year ->
+                val isSelected = selectedYear == year
+                DateSelectorItem(
+                    text = "${year}年",
+                    isSelected = isSelected,
+                    onClick = { onYearSelected(year) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun MonthSelector(
+    selectedYear: Int,
+    selectedMonth: Int?,
+    onMonthSelected: (Int, Int) -> Unit,
+    onBack: () -> Unit
+) {
+    val months = (1..12).toList()
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // 返回按钮和标题
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "返回",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+            Text(
+                text = "${selectedYear}年 - 请选择月份",
+                fontSize = 14.sp,
+                color = Color.Gray,
+                modifier = Modifier.weight(1f),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+            Spacer(modifier = Modifier.width(48.dp))
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(280.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(months) { month ->
+                val isSelected = selectedMonth == month
+                DateSelectorItem(
+                    text = "${month}月",
+                    isSelected = isSelected,
+                    onClick = { onMonthSelected(selectedYear, month) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun DaySelector(
+    selectedYear: Int,
+    selectedMonth: Int,
+    selectedDay: Int?,
+    onDaySelected: (Int, Int, Int) -> Unit,
+    onBack: () -> Unit,
+    onSelectAllDays: (Int, Int) -> Unit
+) {
+    val daysInMonth = java.util.Calendar.getInstance().apply {
+        set(selectedYear, selectedMonth - 1, 1)
+    }.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
+    val days = (1..daysInMonth).toList()
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // 返回按钮和标题
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "返回",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+            Text(
+                text = "${selectedYear}年${selectedMonth}月 - 请选择日期",
+                fontSize = 14.sp,
+                color = Color.Gray,
+                modifier = Modifier.weight(1f),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+            Spacer(modifier = Modifier.width(48.dp))
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // 全部日期选项
+        DateSelectorItem(
+            text = "全部日期",
+            isSelected = selectedDay == null,
+            onClick = { onSelectAllDays(selectedYear, selectedMonth) }
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(240.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(days) { day ->
+                val isSelected = selectedDay == day
+                DateSelectorItem(
+                    text = "${day}日",
+                    isSelected = isSelected,
+                    onClick = { onDaySelected(selectedYear, selectedMonth, day) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun DateSelectorItem(
+    text: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                if (isSelected) MaterialTheme.colorScheme.primary
+                else Color(0xFFF5F5F5)
+            )
+            .clickable(onClick = onClick)
+            .padding(vertical = 14.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            fontSize = 16.sp,
+            color = if (isSelected) Color.White else Color.Black,
+            fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
+        )
+    }
+}
+
+

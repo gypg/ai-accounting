@@ -163,6 +163,34 @@ class AIConversationRepository @Inject constructor(
     }
 
     /**
+     * Add user message with image
+     */
+    suspend fun addUserMessageWithImage(content: String, imageUri: String, transactionId: Long? = null): Long {
+        val conversation = AIConversation(
+            role = ConversationRole.USER,
+            content = content,
+            transactionId = transactionId,
+            imageUri = imageUri
+        )
+        return insertConversation(conversation)
+    }
+
+    /**
+     * Add user message with multiple images
+     */
+    suspend fun addUserMessageWithImages(content: String, imageUris: List<String>, transactionId: Long? = null): Long {
+        // 将多张图片URI用逗号分隔存储
+        val combinedUri = imageUris.joinToString(",")
+        val conversation = AIConversation(
+            role = ConversationRole.USER,
+            content = content,
+            transactionId = transactionId,
+            imageUri = combinedUri
+        )
+        return insertConversation(conversation)
+    }
+
+    /**
      * Add assistant message
      */
     suspend fun addAssistantMessage(content: String, transactionId: Long? = null): Long {

@@ -1,44 +1,60 @@
 package com.example.aiaccounting.ui.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.aiaccounting.data.local.prefs.AppStateManager
 import com.example.aiaccounting.ui.viewmodel.SettingsViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
+    appStateManager: AppStateManager,
     onNavigateBack: () -> Unit,
+    onNavigateToProfile: () -> Unit,
+    onNavigateToAIModelSettings: () -> Unit,
+    onNavigateToAccounts: () -> Unit = {},
+    onNavigateToCategories: () -> Unit = {},
+    onNavigateToExport: () -> Unit = {},
+    onNavigateToTemplates: () -> Unit = {},
+    onNavigateToImport: () -> Unit = {},
+    onNavigateToAISettings: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    var showAboutDialog by remember { mutableStateOf(false) }
+    var showNoticeDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(text = "设置") },
+                title = { 
+                    Text(
+                        text = "设置",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
-                )
+                }
             )
         }
     ) { padding ->
@@ -47,479 +63,327 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
         ) {
-            // 安全设置
-            SecuritySettingsSection(
-                isBiometricEnabled = uiState.isBiometricEnabled,
-                onBiometricToggle = { viewModel.toggleBiometric(it) },
-                onChangePin = { viewModel.showChangePinDialog() }
-            )
-
-            // AI配置
-            AISettingsSection(
-                isAIConfigured = uiState.isAIConfigured,
-                aiModel = uiState.aiModel,
-                onAIConfig = { viewModel.showAIConfigDialog() }
-            )
-
-            // 数据备份
-            BackupSettingsSection(
-                onBackup = { viewModel.backupData() },
-                onRestore = { viewModel.showRestoreDialog() },
-                onExport = { viewModel.exportData() }
-            )
-
-            // 关于
-            AboutSection(
-                version = uiState.appVersion,
-                onAbout = { viewModel.showAboutDialog() }
-            )
-        }
-    }
-
-    // 修改PIN对话框
-    if (uiState.showChangePinDialog) {
-        ChangePinDialog(
-            onDismiss = { viewModel.hideChangePinDialog() },
-            onConfirm = { oldPin, newPin ->
-                viewModel.changePin(oldPin, newPin)
-            }
-        )
-    }
-
-    // AI配置对话框
-    if (uiState.showAIConfigDialog) {
-        AISettingsDialog(
-            currentConfig = uiState.aiConfiguration,
-            onDismiss = { viewModel.hideAIConfigDialog() },
-            onSave = { config ->
-                viewModel.saveAIConfiguration(config)
-            }
-        )
-    }
-
-    // 恢复数据对话框
-    if (uiState.showRestoreDialog) {
-        RestoreDataDialog(
-            onDismiss = { viewModel.hideRestoreDialog() },
-            onRestore = { viewModel.restoreData() }
-        )
-    }
-
-    // 关于对话框
-    if (uiState.showAboutDialog) {
-        AboutDialog(
-            onDismiss = { viewModel.hideAboutDialog() }
-        )
-    }
-}
-
-@Composable
-fun SecuritySettingsSection(
-    isBiometricEnabled: Boolean,
-    onBiometricToggle: (Boolean) -> Unit,
-    onChangePin: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Text(
-                text = "安全设置",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // 生物识别开关
+            // 数据管理区域
+            SettingsSectionTitle("数据管理")
+            
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Fingerprint,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = "生物识别",
-                            fontSize = 16.sp
-                        )
-                        Text(
-                            text = "使用指纹或面部识别快速解锁",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                    }
-                }
-                Switch(
-                    checked = isBiometricEnabled,
-                    onCheckedChange = onBiometricToggle
+                SettingsGridItem(
+                    icon = Icons.Default.AccountBalance,
+                    title = "账户管理",
+                    subtitle = "管理银行卡、现金等账户",
+                    onClick = onNavigateToAccounts,
+                    modifier = Modifier.weight(1f)
+                )
+                SettingsGridItem(
+                    icon = Icons.Default.Label,
+                    title = "分类管理",
+                    subtitle = "管理收支分类",
+                    onClick = onNavigateToCategories,
+                    modifier = Modifier.weight(1f)
                 )
             }
 
-            Divider(modifier = Modifier.padding(vertical = 12.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // 修改PIN
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onChangePin() },
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Lock,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = "修改PIN码",
-                            fontSize = 16.sp
-                        )
-                        Text(
-                            text = "更改应用解锁密码",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                    }
-                }
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = null,
-                    modifier = Modifier.rotate(180f)
+                SettingsGridItem(
+                    icon = Icons.Default.Backup,
+                    title = "数据备份",
+                    subtitle = "备份与恢复数据库",
+                    onClick = onNavigateToExport,
+                    modifier = Modifier.weight(1f),
+                    iconBackgroundColor = Color(0xFFFFF3E0)
                 )
-            }
-        }
-    }
-}
-
-@Composable
-fun AISettingsSection(
-    isAIConfigured: Boolean,
-    aiModel: String,
-    onAIConfig: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Text(
-                text = "AI配置",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onAIConfig() },
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.SmartToy,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = "AI服务配置",
-                            fontSize = 16.sp
-                        )
-                        Text(
-                            text = if (isAIConfigured) "已配置 - $aiModel" else "未配置",
-                            fontSize = 12.sp,
-                            color = if (isAIConfigured) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                    }
-                }
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = null,
-                    modifier = Modifier.rotate(180f)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun BackupSettingsSection(
-    onBackup: () -> Unit,
-    onRestore: () -> Unit,
-    onExport: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Text(
-                text = "数据管理",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // 备份数据
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onBackup() },
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Backup,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = "备份数据",
-                            fontSize = 16.sp
-                        )
-                        Text(
-                            text = "创建数据备份文件",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                    }
-                }
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = null,
-                    modifier = Modifier.rotate(180f)
+                SettingsGridItem(
+                    icon = Icons.Default.Person,
+                    title = "个人中心",
+                    subtitle = "个人资料与头像",
+                    onClick = onNavigateToProfile,
+                    modifier = Modifier.weight(1f),
+                    iconBackgroundColor = Color(0xFFE8F5E9)
                 )
             }
 
-            Divider(modifier = Modifier.padding(vertical = 12.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // 恢复数据
+            // 新增功能入口
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onRestore() },
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Restore,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = "恢复数据",
-                            fontSize = 16.sp
-                        )
-                        Text(
-                            text = "从备份文件恢复数据",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                    }
-                }
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = null,
-                    modifier = Modifier.rotate(180f)
+                SettingsGridItem(
+                    icon = Icons.Default.Bookmark,
+                    title = "记账模板",
+                    subtitle = "快速记账模板管理",
+                    onClick = onNavigateToTemplates,
+                    modifier = Modifier.weight(1f),
+                    iconBackgroundColor = Color(0xFFF3E5F5)
+                )
+                SettingsGridItem(
+                    icon = Icons.Default.FileUpload,
+                    title = "账单导入",
+                    subtitle = "导入支付宝/微信账单",
+                    onClick = onNavigateToImport,
+                    modifier = Modifier.weight(1f),
+                    iconBackgroundColor = Color(0xFFE0F2F1)
                 )
             }
 
-            Divider(modifier = Modifier.padding(vertical = 12.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // 导出Excel
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onExport() },
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.FileDownload,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = "导出Excel",
-                            fontSize = 16.sp
-                        )
-                        Text(
-                            text = "导出账单为Excel文件",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                    }
-                }
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = null,
-                    modifier = Modifier.rotate(180f)
+                SettingsGridItem(
+                    icon = Icons.Default.SmartToy,
+                    title = "AI助手设置",
+                    subtitle = "配置AI大模型API",
+                    onClick = onNavigateToAISettings,
+                    modifier = Modifier.weight(1f),
+                    iconBackgroundColor = Color(0xFFFFF8E1)
                 )
+                // 占位
+                Spacer(modifier = Modifier.weight(1f))
             }
-        }
-    }
-}
 
-@Composable
-fun AboutSection(
-    version: String,
-    onAbout: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Text(
-                text = "关于",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
-            )
+            Spacer(modifier = Modifier.height(24.dp))
 
-            Spacer(modifier = Modifier.height(16.dp))
-
+            // 其他区域
+            SettingsSectionTitle("其他")
+            
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onAbout() },
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
+                // 关于按钮
+                OutlinedButton(
+                    onClick = { showAboutDialog = true },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(8.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Info,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
+                        modifier = Modifier.size(16.dp)
                     )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = "关于应用",
-                            fontSize = 16.sp
-                        )
-                        Text(
-                            text = "版本 $version",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("关于")
                 }
+                
+                // 公告按钮
+                OutlinedButton(
+                    onClick = { showNoticeDialog = true },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Notifications,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("公告")
+                    // 红点提示
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(Color.Red, RoundedCornerShape(4.dp))
+                    )
+                }
+                
+                // 退出登录按钮
+                OutlinedButton(
+                    onClick = { /* TODO: 退出登录 */ },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = Color(0xFFF44336)
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Logout,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("退出登录")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+        }
+    }
+
+    // 关于对话框
+    if (showAboutDialog) {
+        AlertDialog(
+            onDismissRequest = { showAboutDialog = false },
+            title = { Text("关于 AI 记账") },
+            text = {
+                Column {
+                    Text("AI记账是一款智能的个人财务管理应用。")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("版本：1.0.0")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("功能特点：")
+                    Text("• 智能语音识别记账")
+                    Text("• 数据加密安全存储")
+                    Text("• 多维度统计分析")
+                    Text("• Excel导出功能")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAboutDialog = false }) {
+                    Text("确定")
+                }
+            }
+        )
+    }
+
+    // 公告对话框
+    if (showNoticeDialog) {
+        AlertDialog(
+            onDismissRequest = { showNoticeDialog = false },
+            title = { Text("公告") },
+            text = {
+                Column {
+                    Text("欢迎使用 AI 记账！")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("• 新增AI智能记账功能")
+                    Text("• 优化界面设计")
+                    Text("• 修复已知问题")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showNoticeDialog = false }) {
+                    Text("确定")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun SettingsSectionTitle(title: String) {
+    Text(
+        text = title,
+        fontSize = 14.sp,
+        color = Color(0xFF888888),
+        modifier = Modifier.padding(bottom = 12.dp)
+    )
+}
+
+@Composable
+fun SettingsGridItem(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    iconBackgroundColor: Color = Color(0xFFE3F2FD)
+) {
+    Card(
+        modifier = modifier
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 图标
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(iconBackgroundColor),
+                contentAlignment = Alignment.Center
+            ) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    imageVector = icon,
                     contentDescription = null,
-                    modifier = Modifier.rotate(180f)
+                    tint = Color(0xFF2196F3),
+                    modifier = Modifier.size(24.dp)
                 )
             }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // 文字内容
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFF333333)
+                )
+                Text(
+                    text = subtitle,
+                    fontSize = 12.sp,
+                    color = Color(0xFF888888)
+                )
+            }
+
+            // 右箭头
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = Color(0xFFCCCCCC),
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }
 
-// 对话框组件
 @Composable
 fun ChangePinDialog(
     onDismiss: () -> Unit,
     onConfirm: (String, String) -> Unit
 ) {
-    var oldPin by remember { mutableStateOf("") }
+    var currentPin by remember { mutableStateOf("") }
     var newPin by remember { mutableStateOf("") }
     var confirmPin by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf<String?>(null) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("修改PIN码") },
         text = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+            Column {
                 OutlinedTextField(
-                    value = oldPin,
-                    onValueChange = { 
-                        if (it.length <= 6) oldPin = it
-                        error = null
-                    },
+                    value = currentPin,
+                    onValueChange = { if (it.length <= 6) currentPin = it },
                     label = { Text("当前PIN码") },
-                    singleLine = true,
-                    isError = error != null
+                    singleLine = true
                 )
+                Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
                     value = newPin,
-                    onValueChange = { 
-                        if (it.length <= 6) newPin = it
-                        error = null
-                    },
+                    onValueChange = { if (it.length <= 6) newPin = it },
                     label = { Text("新PIN码") },
-                    singleLine = true,
-                    isError = error != null
+                    singleLine = true
                 )
+                Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
                     value = confirmPin,
-                    onValueChange = { 
-                        if (it.length <= 6) confirmPin = it
-                        error = null
-                    },
+                    onValueChange = { if (it.length <= 6) confirmPin = it },
                     label = { Text("确认新PIN码") },
-                    singleLine = true,
-                    isError = error != null
+                    singleLine = true
                 )
-                error?.let {
+                errorMessage?.let {
                     Text(
                         text = it,
                         color = MaterialTheme.colorScheme.error,
@@ -532,17 +396,15 @@ fun ChangePinDialog(
             TextButton(
                 onClick = {
                     when {
-                        oldPin.isBlank() || newPin.isBlank() || confirmPin.isBlank() -> {
-                            error = "请填写所有字段"
-                        }
-                        newPin != confirmPin -> {
-                            error = "两次输入的新PIN码不一致"
-                        }
-                        newPin.length < 4 -> {
-                            error = "PIN码至少需要4位"
-                        }
+                        currentPin.isEmpty() || newPin.isEmpty() || confirmPin.isEmpty() ->
+                            errorMessage = "请填写所有字段"
+                        newPin != confirmPin ->
+                            errorMessage = "两次输入的新PIN码不一致"
+                        newPin.length < 4 ->
+                            errorMessage = "PIN码至少需要4位"
                         else -> {
-                            onConfirm(oldPin, newPin)
+                            errorMessage = null
+                            onConfirm(currentPin, newPin)
                         }
                     }
                 }
@@ -557,121 +419,3 @@ fun ChangePinDialog(
         }
     )
 }
-
-@Composable
-fun AISettingsDialog(
-    currentConfig: AIConfiguration?,
-    onDismiss: () -> Unit,
-    onSave: (AIConfiguration) -> Unit
-) {
-    var apiKey by remember { mutableStateOf(currentConfig?.apiKey ?: "") }
-    var baseUrl by remember { mutableStateOf(currentConfig?.baseUrl ?: "https://api.openai.com/v1/") }
-    var model by remember { mutableStateOf(currentConfig?.model ?: "gpt-3.5-turbo") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("AI配置") },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                OutlinedTextField(
-                    value = apiKey,
-                    onValueChange = { apiKey = it },
-                    label = { Text("API Key") },
-                    singleLine = true
-                )
-                OutlinedTextField(
-                    value = baseUrl,
-                    onValueChange = { baseUrl = it },
-                    label = { Text("API地址") },
-                    singleLine = true
-                )
-                OutlinedTextField(
-                    value = model,
-                    onValueChange = { model = it },
-                    label = { Text("模型") },
-                    singleLine = true
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    onSave(AIConfiguration(apiKey, baseUrl, model))
-                },
-                enabled = apiKey.isNotBlank()
-            ) {
-                Text("保存")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
-            }
-        }
-    )
-}
-
-@Composable
-fun RestoreDataDialog(
-    onDismiss: () -> Unit,
-    onRestore: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("恢复数据") },
-        text = { Text("恢复数据将覆盖当前所有数据，确定要继续吗？") },
-        confirmButton = {
-            TextButton(
-                onClick = onRestore,
-                colors = ButtonDefaults.textButtonColors(
-                    contentColor = MaterialTheme.colorScheme.error
-                )
-            ) {
-                Text("恢复")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
-            }
-        }
-    )
-}
-
-@Composable
-fun AboutDialog(
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("关于AI记账") },
-        text = {
-            Column {
-                Text("AI记账是一款智能的个人财务管理应用。")
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("主要功能：")
-                Text("• 智能记账助手")
-                Text("• 数据安全加密")
-                Text("• 多维度统计分析")
-                Text("• Excel导出")
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("版本：1.0.0")
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("确定")
-            }
-        }
-    )
-}
-
-// 数据类
-data class AIConfiguration(
-    val apiKey: String,
-    val baseUrl: String,
-    val model: String
-)

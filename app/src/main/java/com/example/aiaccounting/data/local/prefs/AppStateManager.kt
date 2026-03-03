@@ -1,0 +1,133 @@
+package com.example.aiaccounting.data.local.prefs
+
+import android.content.Context
+import android.content.SharedPreferences
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/**
+ * 应用状态管理器 - 管理应用的初始化状态和设置
+ */
+@Singleton
+class AppStateManager @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
+    companion object {
+        private const val PREFS_NAME = "app_state_prefs"
+        private const val KEY_DATABASE_INITIALIZED = "database_initialized"
+        private const val KEY_INITIAL_SETUP_COMPLETED = "initial_setup_completed"
+        private const val KEY_AI_MODEL_TYPE = "ai_model_type"
+        private const val KEY_CUSTOM_MODEL_URL = "custom_model_url"
+        private const val KEY_CUSTOM_MODEL_API_KEY = "custom_model_api_key"
+        private const val KEY_USER_NAME = "user_name"
+        private const val KEY_USER_AVATAR = "user_avatar"
+        private const val KEY_CURRENCY = "currency"
+        private const val KEY_LANGUAGE = "language"
+        private const val KEY_THEME = "theme"
+
+        // AI 模型类型
+        const val AI_MODEL_DEFAULT = "default"
+        const val AI_MODEL_CUSTOM = "custom"
+    }
+
+    private val prefs: SharedPreferences by lazy {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
+    // ==================== 数据库初始化状态 ====================
+
+    fun isDatabaseInitialized(): Boolean {
+        return prefs.getBoolean(KEY_DATABASE_INITIALIZED, false)
+    }
+
+    fun setDatabaseInitialized(initialized: Boolean) {
+        prefs.edit().putBoolean(KEY_DATABASE_INITIALIZED, initialized).apply()
+    }
+
+    // ==================== 初始设置状态 ====================
+
+    fun isInitialSetupCompleted(): Boolean {
+        return prefs.getBoolean(KEY_INITIAL_SETUP_COMPLETED, false)
+    }
+
+    fun setInitialSetupCompleted(completed: Boolean) {
+        prefs.edit().putBoolean(KEY_INITIAL_SETUP_COMPLETED, completed).apply()
+    }
+
+    // ==================== AI 模型设置 ====================
+
+    fun getAIModelType(): String {
+        return prefs.getString(KEY_AI_MODEL_TYPE, AI_MODEL_DEFAULT) ?: AI_MODEL_DEFAULT
+    }
+
+    fun setAIModelType(type: String) {
+        prefs.edit().putString(KEY_AI_MODEL_TYPE, type).apply()
+    }
+
+    fun getCustomModelUrl(): String {
+        return prefs.getString(KEY_CUSTOM_MODEL_URL, "") ?: ""
+    }
+
+    fun setCustomModelUrl(url: String) {
+        prefs.edit().putString(KEY_CUSTOM_MODEL_URL, url).apply()
+    }
+
+    fun getCustomModelApiKey(): String {
+        return prefs.getString(KEY_CUSTOM_MODEL_API_KEY, "") ?: ""
+    }
+
+    fun setCustomModelApiKey(apiKey: String) {
+        prefs.edit().putString(KEY_CUSTOM_MODEL_API_KEY, apiKey).apply()
+    }
+
+    // ==================== 用户信息 ====================
+
+    fun getUserName(): String {
+        return prefs.getString(KEY_USER_NAME, "用户") ?: "用户"
+    }
+
+    fun setUserName(name: String) {
+        prefs.edit().putString(KEY_USER_NAME, name).apply()
+    }
+
+    fun getUserAvatar(): String? {
+        return prefs.getString(KEY_USER_AVATAR, null)
+    }
+
+    fun setUserAvatar(avatarPath: String?) {
+        prefs.edit().putString(KEY_USER_AVATAR, avatarPath).apply()
+    }
+
+    // ==================== 通用设置 ====================
+
+    fun getCurrency(): String {
+        return prefs.getString(KEY_CURRENCY, "CNY") ?: "CNY"
+    }
+
+    fun setCurrency(currency: String) {
+        prefs.edit().putString(KEY_CURRENCY, currency).apply()
+    }
+
+    fun getLanguage(): String {
+        return prefs.getString(KEY_LANGUAGE, "zh") ?: "zh"
+    }
+
+    fun setLanguage(language: String) {
+        prefs.edit().putString(KEY_LANGUAGE, language).apply()
+    }
+
+    fun getTheme(): String {
+        return prefs.getString(KEY_THEME, "system") ?: "system"
+    }
+
+    fun setTheme(theme: String) {
+        prefs.edit().putString(KEY_THEME, theme).apply()
+    }
+
+    // ==================== 清除所有状态 ====================
+
+    fun clearAll() {
+        prefs.edit().clear().apply()
+    }
+}

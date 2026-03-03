@@ -4,6 +4,7 @@ import android.content.Context
 import com.example.aiaccounting.data.local.entity.Transaction
 import org.apache.poi.ss.usermodel.*
 import org.apache.poi.ss.util.CellRangeAddress
+import org.apache.poi.xssf.usermodel.XSSFCellStyle
 import org.apache.poi.xssf.usermodel.XSSFWorkbook
 import java.io.File
 import java.io.FileOutputStream
@@ -54,7 +55,7 @@ class ExcelExporter(private val context: Context) {
                 val row = sheet.createRow(index + 1)
 
                 // ID
-                row.createCell(0).setCellValue(transaction.id)
+                row.createCell(0).setCellValue(transaction.id.toDouble())
 
                 // Date
                 val dateCell = row.createCell(1)
@@ -74,10 +75,10 @@ class ExcelExporter(private val context: Context) {
                 }
 
                 // Account ID
-                row.createCell(4).setCellValue(transaction.accountId)
+                row.createCell(4).setCellValue(transaction.accountId.toDouble())
 
                 // Category ID
-                row.createCell(5).setCellValue(transaction.categoryId)
+                row.createCell(5).setCellValue(transaction.categoryId.toDouble())
 
                 // Note
                 row.createCell(6).setCellValue(transaction.note)
@@ -227,7 +228,7 @@ class ExcelExporter(private val context: Context) {
     /**
      * Create header style
      */
-    private fun createHeaderStyle(workbook: Workbook): CellStyle {
+    private fun createHeaderStyle(workbook: XSSFWorkbook): XSSFCellStyle {
         val style = workbook.createCellStyle()
         val font = workbook.createFont()
         
@@ -250,7 +251,7 @@ class ExcelExporter(private val context: Context) {
     /**
      * Create title style
      */
-    private fun createTitleStyle(workbook: Workbook): CellStyle {
+    private fun createTitleStyle(workbook: XSSFWorkbook): XSSFCellStyle {
         val style = workbook.createCellStyle()
         val font = workbook.createFont()
         
@@ -267,7 +268,7 @@ class ExcelExporter(private val context: Context) {
     /**
      * Create date style
      */
-    private fun createDateStyle(workbook: Workbook): CellStyle {
+    private fun createDateStyle(workbook: XSSFWorkbook): XSSFCellStyle {
         val style = workbook.createCellStyle()
         style.dataFormat = workbook.createDataFormat().getFormat("yyyy-mm-dd hh:mm:ss")
         return style
@@ -276,7 +277,7 @@ class ExcelExporter(private val context: Context) {
     /**
      * Create amount style
      */
-    private fun createAmountStyle(workbook: Workbook): CellStyle {
+    private fun createAmountStyle(workbook: XSSFWorkbook): XSSFCellStyle {
         val style = workbook.createCellStyle()
         style.dataFormat = workbook.createDataFormat().getFormat("#,##0.00")
         style.alignment = HorizontalAlignment.RIGHT
@@ -286,7 +287,7 @@ class ExcelExporter(private val context: Context) {
     /**
      * Create income style
      */
-    private fun createIncomeStyle(workbook: Workbook): CellStyle {
+    private fun createIncomeStyle(workbook: XSSFWorkbook): XSSFCellStyle {
         val style = createAmountStyle(workbook)
         val font = workbook.createFont()
         font.color = IndexedColors.GREEN.index
@@ -297,7 +298,7 @@ class ExcelExporter(private val context: Context) {
     /**
      * Create expense style
      */
-    private fun createExpenseStyle(workbook: Workbook): CellStyle {
+    private fun createExpenseStyle(workbook: XSSFWorkbook): XSSFCellStyle {
         val style = createAmountStyle(workbook)
         val font = workbook.createFont()
         font.color = IndexedColors.RED.index

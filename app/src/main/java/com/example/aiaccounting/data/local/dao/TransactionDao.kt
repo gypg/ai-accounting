@@ -67,6 +67,12 @@ interface TransactionDao {
     @Query("DELETE FROM transactions WHERE id = :transactionId")
     suspend fun deleteTransactionById(transactionId: Long)
 
+    @Query("DELETE FROM transactions WHERE categoryId = :categoryId")
+    suspend fun deleteTransactionsByCategory(categoryId: Long)
+
+    @Query("DELETE FROM transactions WHERE accountId = :accountId")
+    suspend fun deleteTransactionsByAccount(accountId: Long)
+
     @Query("""
         SELECT SUM(amount) FROM transactions 
         WHERE type = :type AND date >= :startDate AND date <= :endDate

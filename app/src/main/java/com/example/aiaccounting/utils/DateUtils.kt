@@ -88,4 +88,15 @@ object DateUtils {
         calendar.set(Calendar.MILLISECOND, 999)
         return calendar.time
     }
+    
+    fun formatDateShort(timestamp: Long): String {
+        val date = Date(timestamp)
+        val format = SimpleDateFormat("MM-dd", Locale.getDefault())
+        return format.format(date)
+    }
+    
+    fun formatDateTime(timestamp: Long): String {
+        val date = Date(timestamp)
+        return dateTimeFormat.format(date)
+    }
 }

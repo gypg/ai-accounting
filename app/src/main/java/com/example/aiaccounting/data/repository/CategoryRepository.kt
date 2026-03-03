@@ -13,7 +13,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class CategoryRepository @Inject constructor(
-    private val categoryDao: CategoryDao
+    private val categoryDao: CategoryDao,
+    private val transactionRepository: TransactionRepository
 ) {
 
     /**
@@ -28,6 +29,13 @@ class CategoryRepository @Inject constructor(
      */
     suspend fun getAllCategoriesList(): List<Category> {
         return categoryDao.getAllCategories().first()
+    }
+
+    /**
+     * Get all categories synchronously (for AI operations)
+     */
+    suspend fun getAllCategoriesSync(): List<Category> {
+        return getAllCategoriesList()
     }
 
     /**
@@ -73,16 +81,22 @@ class CategoryRepository @Inject constructor(
     }
 
     /**
-     * Delete category
+     * Delete category and all related transactions
      */
     suspend fun deleteCategory(category: Category) {
+        // 先删除该分类下的所有交易记录
+        transactionRepository.deleteTransactionsByCategory(category.id)
+        // 再删除分类
         categoryDao.deleteCategory(category)
     }
 
     /**
-     * Delete category by ID
+     * Delete category by ID and all related transactions
      */
     suspend fun deleteCategoryById(categoryId: Long) {
+        // 先删除该分类下的所有交易记录
+        transactionRepository.deleteTransactionsByCategory(categoryId)
+        // 再删除分类
         categoryDao.deleteCategoryById(categoryId)
     }
 

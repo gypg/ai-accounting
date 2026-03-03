@@ -8,7 +8,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -22,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.aiaccounting.data.local.entity.Account
 import com.example.aiaccounting.data.local.entity.AccountType
+import com.example.aiaccounting.ui.components.ColorSelector
 import com.example.aiaccounting.ui.viewmodel.AccountViewModel
 import com.example.aiaccounting.utils.NumberUtils
 
@@ -46,7 +46,7 @@ fun AccountsScreen(
                 title = { Text(text = "账户管理") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -165,8 +165,9 @@ fun AccountsScreen(
 
 @Composable
 fun TotalAssetsCard(accounts: List<Account>) {
-    val totalAssets = accounts.filter { it.isAsset }.sumOf { it.balance }
-    val totalLiabilities = accounts.filter { !it.isAsset }.sumOf { it.balance }
+    val assetTypes = setOf(AccountType.CASH, AccountType.BANK, AccountType.DEBIT_CARD, AccountType.ALIPAY, AccountType.WECHAT)
+    val totalAssets = accounts.filter { it.type in assetTypes }.sumOf { it.balance }
+    val totalLiabilities = accounts.filter { it.type == AccountType.CREDIT_CARD }.sumOf { kotlin.math.abs(it.balance) }
     val netWorth = totalAssets - totalLiabilities
 
     Card(
@@ -373,7 +374,8 @@ fun AddAccountDialog(
                 Text("账户颜色", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                 ColorSelector(
                     selectedColor = selectedColor,
-                    onColorSelected = { selectedColor = it }
+                    onColorSelected = { selectedColor = it },
+                    colors = AccountColors
                 )
             }
         },
@@ -445,7 +447,8 @@ fun EditAccountDialog(
                 Text("账户颜色", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                 ColorSelector(
                     selectedColor = selectedColor,
-                    onColorSelected = { selectedColor = it }
+                    onColorSelected = { selectedColor = it },
+                    colors = AccountColors
                 )
             }
         },
@@ -503,47 +506,12 @@ fun AccountTypeSelector(
     }
 }
 
-@Composable
-fun ColorSelector(
-    selectedColor: String,
-    onColorSelected: (String) -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        AccountColors.forEach { color ->
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(Color(android.graphics.Color.parseColor(color)))
-                    .clickable { onColorSelected(color) }
-                    .then(
-                        if (selectedColor == color) {
-                            Modifier.border(3.dp, MaterialTheme.colorScheme.primary, CircleShape)
-                        } else Modifier
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                if (selectedColor == color) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
 fun getAccountIcon(type: AccountType): androidx.compose.ui.graphics.vector.ImageVector {
     return when (type) {
         AccountType.CASH -> Icons.Default.Money
-        AccountType.BANK_CARD -> Icons.Default.CreditCard
+        AccountType.BANK -> Icons.Default.AccountBalance
         AccountType.CREDIT_CARD -> Icons.Default.CreditCard
+        AccountType.DEBIT_CARD -> Icons.Default.CreditCard
         AccountType.ALIPAY -> Icons.Default.AccountBalanceWallet
         AccountType.WECHAT -> Icons.Default.Chat
         AccountType.OTHER -> Icons.Default.AccountBalance
@@ -564,8 +532,9 @@ val AccountColors = listOf(
 val AccountType.displayName: String
     get() = when (this) {
         AccountType.CASH -> "现金"
-        AccountType.BANK_CARD -> "银行卡"
+        AccountType.BANK -> "银行卡"
         AccountType.CREDIT_CARD -> "信用卡"
+        AccountType.DEBIT_CARD -> "借记卡"
         AccountType.ALIPAY -> "支付宝"
         AccountType.WECHAT -> "微信"
         AccountType.OTHER -> "其他"

@@ -21,8 +21,6 @@
 #-renamesourcefileattribute SourceFile
 
 # Keep data models
--keep class com.example.aiaccounting.data.model.** { *; }
--keep class com.example.aiaccounting.data.remote.dto.** { *; }
 -keep class com.example.aiaccounting.data.local.entity.** { *; }
 
 # Keep Room

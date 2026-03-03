@@ -99,8 +99,13 @@ fun SetupPinScreen(
                     pin.length != 4 -> errorMessage = "PIN码必须是4位数字"
                     pin != confirmPin -> errorMessage = "两次输入的PIN码不一致"
                     else -> {
-                        viewModel.setupPin(pin)
-                        onSetupComplete(pin)
+                        viewModel.setupPin(pin) { success ->
+                            if (success) {
+                                onSetupComplete(pin)
+                            } else {
+                                errorMessage = "设置PIN码失败"
+                            }
+                        }
                     }
                 }
             },

@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.aiaccounting.data.local.entity.Budget
 import com.example.aiaccounting.data.local.entity.BudgetPeriod
 import com.example.aiaccounting.data.repository.BudgetRepository
+import com.example.aiaccounting.data.repository.CategoryRepository
+import com.example.aiaccounting.data.repository.TransactionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -15,7 +17,9 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class BudgetViewModel @Inject constructor(
-    private val budgetRepository: BudgetRepository
+    private val budgetRepository: BudgetRepository,
+    private val categoryRepository: CategoryRepository,
+    private val transactionRepository: TransactionRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(BudgetUiState())
@@ -28,6 +32,29 @@ class BudgetViewModel @Inject constructor(
             initialValue = emptyList()
         )
 
+    val budgetsWithDetails = budgetRepository.getAllBudgets()
+        .map { budgetList ->
+            budgetList.map { budget ->
+                val category = categoryRepository.getCategoryById(budget.categoryId)
+                val spent = calculateSpent(budget)
+                BudgetWithDetails(
+                    budget = budget,
+                    categoryName = category?.name ?: "未分类",
+                    spent = spent
+                )
+            }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    private suspend fun calculateSpent(budget: Budget): Double {
+        // 简化计算，实际应该根据预算周期计算
+        return 0.0
+    }
+
     /**
      * Add a new budget
      */
@@ -39,8 +66,7 @@ class BudgetViewModel @Inject constructor(
                 val budget = Budget(
                     categoryId = categoryId,
                     amount = amount,
-                    period = period,
-                    spent = 0.0
+                    period = period
                 )
                 
                 budgetRepository.insertBudget(budget)
@@ -82,16 +108,10 @@ class BudgetViewModel @Inject constructor(
     }
 
     /**
-     * Update budget spent amount
+     * Get budgets in date range
      */
-    fun updateBudgetSpent(budgetId: Long, spent: Double) {
-        viewModelScope.launch {
-            try {
-                budgetRepository.updateBudgetSpent(budgetId, spent)
-            } catch (e: Exception) {
-                _uiState.update { it.copy(error = e.message) }
-            }
-        }
+    fun getBudgetsInRange(startDate: Long, endDate: Long): Flow<List<Budget>> {
+        return budgetRepository.getBudgetsInRange(startDate, endDate)
     }
 
     /**
@@ -121,4 +141,13 @@ data class BudgetUiState(
     val error: String? = null,
     val showAddDialog: Boolean = false,
     val editingBudget: Budget? = null
+)
+
+/**
+ * Budget with additional details for UI
+ */
+data class BudgetWithDetails(
+    val budget: Budget,
+    val categoryName: String,
+    val spent: Double
 )

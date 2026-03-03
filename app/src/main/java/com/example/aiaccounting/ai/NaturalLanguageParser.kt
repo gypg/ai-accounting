@@ -4,12 +4,15 @@ import com.example.aiaccounting.data.local.entity.Category
 import com.example.aiaccounting.data.local.entity.TransactionType
 import java.util.*
 import java.util.regex.Pattern
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * 自然语言解析器
  * 用于从用户输入中提取记账信息
  */
-class NaturalLanguageParser {
+@Singleton
+class NaturalLanguageParser @Inject constructor() {
 
     /**
      * 解析结果数据类
@@ -241,7 +244,7 @@ class NaturalLanguageParser {
             "转账", "转给", "转给", "转到", "划转", "调拨"
         )
         
-        val lowerInput = input.toLowerCase()
+        val lowerInput = input.lowercase()
         
         return when {
             incomeKeywords.any { lowerInput.contains(it) } -> TransactionType.INCOME

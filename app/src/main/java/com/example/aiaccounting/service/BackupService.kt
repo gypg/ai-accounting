@@ -30,8 +30,10 @@ class BackupService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val CHANNEL_ID = "backup_channel"
     private val NOTIFICATION_ID = 1001
-
+    
     companion object {
+        private const val BACKUP_INFO_FILE = "backup_info.json"
+        private const val DATABASE_FILE_NAME = "ai_accounting.db"
         const val ACTION_BACKUP = "com.example.aiaccounting.ACTION_BACKUP"
         const val ACTION_RESTORE = "com.example.aiaccounting.ACTION_RESTORE"
         const val ACTION_AUTO_BACKUP = "com.example.aiaccounting.ACTION_AUTO_BACKUP"
@@ -101,31 +103,59 @@ class BackupService : Service() {
                 val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
                 val backupFile = File(backupDir, "ai_accounting_backup_$timestamp.zip")
 
-                // Note: Database backup temporarily disabled
-                // TODO: Implement proper database backup when database is initialized
+                // Get database file
+                val dbFile = getDatabasePath(DATABASE_FILE_NAME)
+                val filesToBackup = mutableListOf<File>()
 
-                // Create a placeholder file
-                val placeholderFile = File(cacheDir, "backup_info.txt")
-                placeholderFile.writeText("Backup created at $timestamp")
+                // Create backup info
+                val backupInfo = BackupInfo(
+                    version = 1,
+                    timestamp = timestamp,
+                    appVersion = packageManager.getPackageInfo(packageName, 0).longVersionCode.toInt()
+                )
+                val backupInfoFile = File(cacheDir, BACKUP_INFO_FILE)
+                backupInfoFile.writeText(com.google.gson.Gson().toJson(backupInfo))
+                filesToBackup.add(backupInfoFile)
 
-                zipFiles(listOf(placeholderFile), backupFile)
+                // Add database file if exists
+                if (dbFile.exists()) {
+                    filesToBackup.add(dbFile)
+                    // Also add WAL and SHM files if they exist
+                    val walFile = File("$dbFile-wal")
+                    val shmFile = File("$dbFile-shm")
+                    if (walFile.exists()) filesToBackup.add(walFile)
+                    if (shmFile.exists()) filesToBackup.add(shmFile)
+                }
+
+                // Zip all files
+                zipFiles(filesToBackup, backupFile)
 
                 // Encrypt backup
                 val encryptedFile = File("$backupFile.enc")
                 encryptFile(backupFile, encryptedFile)
 
-                // Delete unencrypted file
+                // Cleanup temp files
                 backupFile.delete()
-                placeholderFile.delete()
+                backupInfoFile.delete()
 
                 updateNotification("备份完成: ${encryptedFile.name}", isComplete = true)
                 sendBackupBroadcast(true, "备份成功: ${encryptedFile.absolutePath}")
             } catch (e: Exception) {
+                e.printStackTrace()
                 updateNotification("备份失败: ${e.message}", isComplete = true)
                 sendBackupBroadcast(false, "备份失败: ${e.message}")
             }
         }
     }
+
+    /**
+     * Backup info data class
+     */
+    data class BackupInfo(
+        val version: Int,
+        val timestamp: String,
+        val appVersion: Int
+    )
 
     private fun startRestore(restorePath: String) {
         serviceScope.launch {
@@ -146,20 +176,75 @@ class BackupService : Service() {
                 extractDir.mkdirs()
                 unzipFile(decryptedFile, extractDir)
 
-                // Note: Database restore temporarily disabled
-                // TODO: Implement proper database restore when database is initialized
+                // Verify backup info
+                val backupInfoFile = File(extractDir, BACKUP_INFO_FILE)
+                if (!backupInfoFile.exists()) {
+                    throw IllegalStateException("无效的备份文件")
+                }
+
+                // Close current database connection before restoring
+                closeDatabase()
+
+                // Restore database files
+                val extractedDbFile = File(extractDir, DATABASE_FILE_NAME)
+                if (extractedDbFile.exists()) {
+                    val targetDbFile = getDatabasePath(DATABASE_FILE_NAME)
+                    
+                    // Backup current database before overwriting
+                    val currentBackup = File(cacheDir, "current_db_backup.tmp")
+                    if (targetDbFile.exists()) {
+                        targetDbFile.copyTo(currentBackup, overwrite = true)
+                    }
+
+                    try {
+                        // Copy restored database
+                        extractedDbFile.copyTo(targetDbFile, overwrite = true)
+                        
+                        // Restore WAL file if exists
+                        val extractedWal = File(extractDir, "$DATABASE_FILE_NAME-wal")
+                        val targetWal = File("$targetDbFile-wal")
+                        if (extractedWal.exists()) {
+                            extractedWal.copyTo(targetWal, overwrite = true)
+                        }
+                        
+                        // Restore SHM file if exists
+                        val extractedShm = File(extractDir, "$DATABASE_FILE_NAME-shm")
+                        val targetShm = File("$targetDbFile-shm")
+                        if (extractedShm.exists()) {
+                            extractedShm.copyTo(targetShm, overwrite = true)
+                        }
+                        
+                        // Delete current backup on success
+                        currentBackup.delete()
+                    } catch (e: Exception) {
+                        // Restore original database on failure
+                        if (currentBackup.exists()) {
+                            currentBackup.copyTo(targetDbFile, overwrite = true)
+                        }
+                        throw e
+                    }
+                }
 
                 // Cleanup
                 decryptedFile.delete()
                 extractDir.deleteRecursively()
 
-                updateNotification("恢复完成", isComplete = true)
-                sendRestoreBroadcast(true, "恢复成功")
+                updateNotification("恢复完成，请重启应用", isComplete = true)
+                sendRestoreBroadcast(true, "恢复成功，请重启应用以完成数据加载")
             } catch (e: Exception) {
+                e.printStackTrace()
                 updateNotification("恢复失败: ${e.message}", isComplete = true)
                 sendRestoreBroadcast(false, "恢复失败: ${e.message}")
             }
         }
+    }
+
+    /**
+     * Close database connection before restore
+     */
+    private fun closeDatabase() {
+        // Note: Database will be closed when the app restarts
+        // This is a placeholder for any cleanup needed
     }
 
     private fun performAutoBackup() {
@@ -212,7 +297,8 @@ class BackupService : Service() {
         ZipInputStream(FileInputStream(zipFile)).use { zis ->
             var entry: ZipEntry?
             while (zis.nextEntry.also { entry = it } != null) {
-                val destFile = File(destDir, entry!!.name)
+                val entryName = entry?.name ?: continue
+                val destFile = File(destDir, entryName)
                 destFile.parentFile?.mkdirs()
                 destFile.outputStream().use { it.write(zis.readBytes()) }
             }
@@ -220,9 +306,8 @@ class BackupService : Service() {
     }
 
     private fun encryptFile(inputFile: File, outputFile: File) {
-        val key = securityManager.getDatabaseKey()
+        val secretKey = securityManager.getEncryptionKey()
         val cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")
-        val secretKey = javax.crypto.spec.SecretKeySpec(key, "AES")
         cipher.init(javax.crypto.Cipher.ENCRYPT_MODE, secretKey)
 
         FileInputStream(inputFile).use { fis ->
@@ -252,9 +337,8 @@ class BackupService : Service() {
             val iv = ByteArray(12)
             fis.read(iv)
 
-            val key = securityManager.getDatabaseKey()
+            val secretKey = securityManager.getEncryptionKey()
             val cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")
-            val secretKey = javax.crypto.spec.SecretKeySpec(key, "AES")
             val gcmSpec = javax.crypto.spec.GCMParameterSpec(128, iv)
             cipher.init(javax.crypto.Cipher.DECRYPT_MODE, secretKey, gcmSpec)
 

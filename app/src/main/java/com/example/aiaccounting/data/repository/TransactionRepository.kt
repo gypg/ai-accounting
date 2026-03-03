@@ -96,6 +96,13 @@ class TransactionRepository @Inject constructor(
     }
 
     /**
+     * Get recent transactions synchronously (for AI operations)
+     */
+    suspend fun getRecentTransactionsSync(limit: Int = 10): List<Transaction> {
+        return getRecentTransactions(limit).first()
+    }
+
+    /**
      * Insert new transaction
      */
     suspend fun insertTransaction(transaction: Transaction): Long {
@@ -128,6 +135,20 @@ class TransactionRepository @Inject constructor(
      */
     suspend fun deleteTransactionById(transactionId: Long) {
         transactionDao.deleteTransactionById(transactionId)
+    }
+
+    /**
+     * Delete all transactions by category ID
+     */
+    suspend fun deleteTransactionsByCategory(categoryId: Long) {
+        transactionDao.deleteTransactionsByCategory(categoryId)
+    }
+
+    /**
+     * Delete all transactions by account ID
+     */
+    suspend fun deleteTransactionsByAccount(accountId: Long) {
+        transactionDao.deleteTransactionsByAccount(accountId)
     }
 
     /**

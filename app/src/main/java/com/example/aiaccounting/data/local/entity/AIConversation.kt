@@ -14,7 +14,8 @@ data class AIConversation(
     val content: String,
     val timestamp: Long = System.currentTimeMillis(),
     val transactionId: Long? = null,  // If this message created a transaction
-    val isBookmarked: Boolean = false
+    val isBookmarked: Boolean = false,
+    val imageUri: String? = null  // 图片URI，如果有图片的话
 )
 
 /**

@@ -57,7 +57,7 @@ class AccountViewModel @Inject constructor(
                     balance = initialBalance,
                     icon = icon,
                     color = color,
-                    isDefault = accounts.value.flatten().isEmpty() // First account is default
+                    isDefault = accounts.value.isEmpty() // First account is default
                 )
                 
                 accountRepository.insertAccount(account)

@@ -5,7 +5,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -34,7 +33,8 @@ fun EditTransactionScreen(
     val uiState by viewModel.uiState.collectAsState()
     val accounts by viewModel.accounts.collectAsState()
     val categories by viewModel.categories.collectAsState()
-    val transaction by viewModel.getTransactionById(transactionId).collectAsState(initial = null)
+    
+    var transaction by remember { mutableStateOf<Transaction?>(null) }
 
     // 表单状态
     var amount by remember { mutableStateOf("") }
@@ -47,6 +47,10 @@ fun EditTransactionScreen(
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
     // 加载交易数据
+    LaunchedEffect(transactionId) {
+        transaction = viewModel.getTransactionById(transactionId)
+    }
+    
     LaunchedEffect(transaction) {
         transaction?.let { trans ->
             amount = trans.amount.toString()
@@ -74,7 +78,7 @@ fun EditTransactionScreen(
                 title = { Text(text = "编辑交易") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
                     }
                 },
                 actions = {

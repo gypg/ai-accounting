@@ -2,9 +2,9 @@ package com.example.aiaccounting.data.repository
 
 import com.example.aiaccounting.data.local.dao.AccountDao
 import com.example.aiaccounting.data.local.entity.Account
-import com.example.aiaccounting.data.local.entity.AccountType
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -13,18 +13,26 @@ import javax.inject.Singleton
  */
 @Singleton
 class AccountRepository @Inject constructor(
-    private val accountDao: AccountDao
+    private val accountDao: AccountDao,
+    private val transactionRepository: TransactionRepository
 ) {
 
     /**
      * Get all accounts as Flow
      */
-    fun getAllAccounts(): Flow<List<List<Account>>> {
+    fun getAllAccounts(): Flow<List<Account>> {
+        return accountDao.getAllAccounts()
+    }
+
+    /**
+     * Get all accounts grouped by type
+     */
+    fun getAllAccountsGrouped(): Flow<List<List<Account>>> {
         return accountDao.getAllAccounts().map { accounts ->
-            accounts.groupBy { it.type }
-                .mapValues { entry -> entry.value.sortedByDescending { it.isDefault } }
-                .values
-                .toList()
+            val grouped = accounts.groupBy { it.type }
+            grouped.values.map { accountList ->
+                accountList.sortedByDescending { it.isDefault }
+            }.toList()
         }
     }
 
@@ -36,6 +44,13 @@ class AccountRepository @Inject constructor(
     }
 
     /**
+     * Get all accounts synchronously (for AI operations)
+     */
+    suspend fun getAllAccountsSync(): List<Account> {
+        return getAllAccountsList()
+    }
+
+    /**
      * Get account by ID
      */
     suspend fun getAccountById(accountId: Long): Account? {
@@ -43,32 +58,9 @@ class AccountRepository @Inject constructor(
     }
 
     /**
-     * Get default account
-     */
-    suspend fun getDefaultAccount(): Account? {
-        return accountDao.getDefaultAccount()
-    }
-
-    /**
-     * Get accounts by type
-     */
-    fun getAccountsByType(type: AccountType): Flow<List<Account>> {
-        return accountDao.getAccountsByType(type)
-    }
-
-    /**
      * Insert new account
      */
     suspend fun insertAccount(account: Account): Long {
-        // If this is set as default, remove default from other accounts
-        if (account.isDefault) {
-            val existingAccounts = getAllAccountsList()
-            existingAccounts.forEach { acc ->
-                if (acc.isDefault && acc.id != account.id) {
-                    accountDao.updateAccount(acc.copy(isDefault = false))
-                }
-            }
-        }
         return accountDao.insertAccount(account)
     }
 
@@ -76,23 +68,27 @@ class AccountRepository @Inject constructor(
      * Update account
      */
     suspend fun updateAccount(account: Account) {
-        // If this is set as default, remove default from other accounts
-        if (account.isDefault) {
-            val existingAccounts = getAllAccountsList()
-            existingAccounts.forEach { acc ->
-                if (acc.isDefault && acc.id != account.id) {
-                    accountDao.updateAccount(acc.copy(isDefault = false))
-                }
-            }
-        }
-        accountDao.updateAccount(account.copy(updatedAt = System.currentTimeMillis()))
+        accountDao.updateAccount(account)
     }
 
     /**
-     * Delete account
+     * Delete account and all related transactions
      */
     suspend fun deleteAccount(account: Account) {
+        // 先删除该账户下的所有交易记录
+        transactionRepository.deleteTransactionsByAccount(account.id)
+        // 再删除账户
         accountDao.deleteAccount(account)
+    }
+
+    /**
+     * Delete account by ID and all related transactions
+     */
+    suspend fun deleteAccountById(accountId: Long) {
+        // 先删除该账户下的所有交易记录
+        transactionRepository.deleteTransactionsByAccount(accountId)
+        // 再删除账户
+        accountDao.deleteAccountById(accountId)
     }
 
     /**
@@ -110,34 +106,65 @@ class AccountRepository @Inject constructor(
     }
 
     /**
-     * Get total total balance across all accounts
+     * Set default account
+     */
+    suspend fun setDefaultAccount(accountId: Long) {
+        accountDao.setDefaultAccount(accountId)
+    }
+
+    /**
+     * Get default account
+     */
+    suspend fun getDefaultAccount(): Account? {
+        return accountDao.getDefaultAccount()
+    }
+
+    /**
+     * Get total balance
      */
     suspend fun getTotalBalance(): Double {
         return accountDao.getTotalBalance() ?: 0.0
     }
 
     /**
-     * Search accounts
+     * Get total assets (positive balance accounts)
      */
-    fun searchAccounts(query: String): Flow<List<Account>> {
-        return accountDao.searchAccounts(query)
+    fun getTotalAssets(): Flow<Double> {
+        return accountDao.getTotalAssets()
     }
 
     /**
-     * Create default cash account if none exists
+     * Get total liabilities (negative balance accounts)
      */
-    suspend fun createDefaultCashAccountIfNeeded() {
-        val accounts = getAllAccountsList()
-        if (accounts.isEmpty()) {
-            val defaultAccount = Account(
-                name = "现金",
-                type = AccountType.CASH,
-                balance = 0.0,
-                icon = "💵",
-                color = "#4CAF50",
-                isDefault = true
-            )
-            insertAccount(defaultAccount)
-        }
+    fun getTotalLiabilities(): Flow<Double> {
+        return accountDao.getTotalLiabilities()
+    }
+
+    /**
+     * Get account count
+     */
+    suspend fun getAccountCount(): Int {
+        return accountDao.getAccountCount()
+    }
+
+    /**
+     * Check if account exists
+     */
+    suspend fun accountExists(name: String): Boolean {
+        return accountDao.accountExists(name)
+    }
+
+    /**
+     * Update account balance
+     */
+    suspend fun updateAccountBalance(accountId: Long, newBalance: Double) {
+        accountDao.updateAccountBalance(accountId, newBalance)
+    }
+
+    /**
+     * Adjust account balance
+     */
+    suspend fun adjustAccountBalance(accountId: Long, amount: Double) {
+        accountDao.adjustAccountBalance(accountId, amount)
     }
 }

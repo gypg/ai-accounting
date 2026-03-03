@@ -81,9 +81,9 @@ class BudgetRepository @Inject constructor(
     }
 
     /**
-     * Get budgets with spent amounts
+     * Get budgets in date range
      */
-    fun getBudgetsWithSpent(startDate: Long, endDate: Long): Flow<List<BudgetDao.BudgetWithSpent>> {
+    fun getBudgetsInRange(startDate: Long, endDate: Long): Flow<List<Budget>> {
         return budgetDao.getBudgetsWithSpent(startDate, endDate)
     }
 
@@ -92,15 +92,6 @@ class BudgetRepository @Inject constructor(
      */
     suspend fun getActiveBudgetCount(): Int {
         return budgetDao.getActiveBudgetCount()
-    }
-
-    /**
-     * Check if category is over budget
-     */
-    suspend fun isOverBudget(categoryId: Long): Boolean {
-        val budget = getCurrentBudgetForCategory(categoryId) ?: return false
-        val budgetsWithSpent = getBudgetsWithSpent(budget.startDate, budget.endDate ?: System.currentTimeMillis()).first()
-        return budgetsWithSpent.any { it.id == budget.id && it.isOverBudget }
     }
 
     /**
@@ -115,13 +106,6 @@ class BudgetRepository @Inject constructor(
      */
     fun getBudgetByCategory(categoryId: Long): Flow<Budget?> {
         return budgetDao.getBudgetByCategory(categoryId)
-    }
-
-    /**
-     * Update budget spent amount
-     */
-    suspend fun updateBudgetSpent(budgetId: Long, spent: Double) {
-        budgetDao.updateBudgetSpent(budgetId, spent)
     }
 
     /**

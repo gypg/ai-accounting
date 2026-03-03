@@ -18,7 +18,11 @@ class Converters {
 
     @TypeConverter
     fun toAccountType(value: String): AccountType {
-        return AccountType.valueOf(value)
+        return try {
+            AccountType.valueOf(value)
+        } catch (e: IllegalArgumentException) {
+            AccountType.CASH
+        }
     }
 
     @TypeConverter
@@ -28,7 +32,11 @@ class Converters {
 
     @TypeConverter
     fun toTransactionType(value: String): TransactionType {
-        return TransactionType.valueOf(value)
+        return try {
+            TransactionType.valueOf(value)
+        } catch (e: IllegalArgumentException) {
+            TransactionType.EXPENSE
+        }
     }
 
     @TypeConverter
@@ -38,7 +46,11 @@ class Converters {
 
     @TypeConverter
     fun toBudgetPeriod(value: String): BudgetPeriod {
-        return BudgetPeriod.valueOf(value)
+        return try {
+            BudgetPeriod.valueOf(value)
+        } catch (e: IllegalArgumentException) {
+            BudgetPeriod.MONTHLY
+        }
     }
 
     @TypeConverter
@@ -48,6 +60,10 @@ class Converters {
 
     @TypeConverter
     fun toConversationRole(value: String): ConversationRole {
-        return ConversationRole.valueOf(value)
+        return try {
+            ConversationRole.valueOf(value)
+        } catch (e: IllegalArgumentException) {
+            ConversationRole.USER
+        }
     }
 }

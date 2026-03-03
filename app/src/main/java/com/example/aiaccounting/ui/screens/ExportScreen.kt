@@ -2,7 +2,6 @@ package com.example.aiaccounting.ui.screens
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -35,7 +34,7 @@ fun ExportScreen(
                 title = { Text(text = "数据导出") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -59,7 +58,12 @@ fun ExportScreen(
                 onExportClick = {
                     when (selectedType) {
                         ExportType.CUSTOM_RANGE -> showDateRangeDialog = true
-                        else -> performExport(viewModel, selectedType) { result ->
+                        else -> performExport(
+                            viewModel = viewModel,
+                            type = selectedType,
+                            selectedYear = uiState.selectedYear,
+                            selectedMonth = uiState.selectedMonth
+                        ) { result ->
                             exportResult = result
                             showResultDialog = true
                         }
@@ -110,25 +114,27 @@ fun ExportScreen(
     }
 
     // 导出结果对话框
-    if (showResultDialog && exportResult != null) {
-        AlertDialog(
-            onDismissRequest = { showResultDialog = false },
-            title = { Text("导出成功") },
-            text = { 
-                Column {
-                    Text("文件已保存到:")
-                    Text(
-                        exportResult!!.absolutePath,
-                        style = MaterialTheme.typography.bodySmall
-                    )
+    exportResult?.let { result ->
+        if (showResultDialog) {
+            AlertDialog(
+                onDismissRequest = { showResultDialog = false },
+                title = { Text("导出成功") },
+                text = {
+                    Column {
+                        Text("文件已保存到:")
+                        Text(
+                            result.absolutePath,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showResultDialog = false }) {
+                        Text("确定")
+                    }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { showResultDialog = false }) {
-                    Text("确定")
-                }
-            }
-        )
+            )
+        }
     }
 
     // 显示导出进度
@@ -165,6 +171,8 @@ fun ExportScreen(
 private fun performExport(
     viewModel: ExportViewModel,
     type: ExportType,
+    selectedYear: Int,
+    selectedMonth: Int,
     onResult: (File) -> Unit
 ) {
     when (type) {
@@ -176,7 +184,7 @@ private fun performExport(
         }
         ExportType.SPECIFIC_MONTH -> {
             // 使用当前选中的年月
-            viewModel.exportMonth(uiState.value.selectedYear, uiState.value.selectedMonth) { result ->
+            viewModel.exportMonth(selectedYear, selectedMonth) { result ->
                 result.onSuccess { onResult(it) }
             }
         }
@@ -352,18 +360,22 @@ fun DateRangeDialog(
         }
     )
 
-    // 日期选择器
+    // 开始日期选择器
     if (showStartDatePicker) {
-        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = startDate.time)
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = startDate.time
+        )
         DatePickerDialog(
             onDismissRequest = { showStartDatePicker = false },
             confirmButton = {
-                TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let {
-                        startDate = Date(it)
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let {
+                            startDate = Date(it)
+                        }
+                        showStartDatePicker = false
                     }
-                    showStartDatePicker = false
-                }) {
+                ) {
                     Text("确定")
                 }
             },
@@ -377,17 +389,22 @@ fun DateRangeDialog(
         }
     }
 
+    // 结束日期选择器
     if (showEndDatePicker) {
-        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = endDate.time)
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = endDate.time
+        )
         DatePickerDialog(
             onDismissRequest = { showEndDatePicker = false },
             confirmButton = {
-                TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let {
-                        endDate = Date(it)
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let {
+                            endDate = Date(it)
+                        }
+                        showEndDatePicker = false
                     }
-                    showEndDatePicker = false
-                }) {
+                ) {
                     Text("确定")
                 }
             },

@@ -1,11 +1,12 @@
 package com.example.aiaccounting.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -17,7 +18,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.aiaccounting.data.local.entity.Account
 import com.example.aiaccounting.data.local.entity.Category
 import com.example.aiaccounting.data.local.entity.TransactionType
+import com.example.aiaccounting.ui.components.FlowRow
 import com.example.aiaccounting.ui.viewmodel.TransactionViewModel
+import com.example.aiaccounting.utils.DateUtils
 import com.example.aiaccounting.utils.NumberUtils
 import java.util.*
 
@@ -49,7 +52,7 @@ fun AddTransactionScreen(
                 title = { Text(text = "记一笔") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -298,7 +301,8 @@ fun AccountSelector(
                                 Icon(
                                     imageVector = when (account.type) {
                                         com.example.aiaccounting.data.local.entity.AccountType.CASH -> Icons.Default.Payments
-                                        com.example.aiaccounting.data.local.entity.AccountType.BANK_CARD -> Icons.Default.CreditCard
+                                        com.example.aiaccounting.data.local.entity.AccountType.BANK -> Icons.Default.AccountBalance
+                                        com.example.aiaccounting.data.local.entity.AccountType.DEBIT_CARD -> Icons.Default.CreditCard
                                         com.example.aiaccounting.data.local.entity.AccountType.ALIPAY -> Icons.Default.AccountBalanceWallet
                                         com.example.aiaccounting.data.local.entity.AccountType.WECHAT -> Icons.Default.Chat
                                         com.example.aiaccounting.data.local.entity.AccountType.CREDIT_CARD -> Icons.Default.CreditScore
@@ -393,7 +397,7 @@ fun DateSelector(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = NumberUtils.formatDate(date),
+                    text = DateUtils.formatDate(date),
                     style = MaterialTheme.typography.bodyLarge
                 )
             }
@@ -430,75 +434,6 @@ fun NoteInput(
                 minLines = 2,
                 maxLines = 4
             )
-        }
-    }
-}
-
-// 简单的FlowRow实现
-@Composable
-fun FlowRow(
-    modifier: Modifier = Modifier,
-    horizontalArrangement: Arrangement.Horizontal = Arrangement.Start,
-    verticalArrangement: Arrangement.Vertical = Arrangement.Top,
-    content: @Composable () -> Unit
-) {
-    Layout(
-        content = content,
-        modifier = modifier
-    ) { measurables, constraints ->
-        val hGapPx = 8.dp.roundToPx()
-        val vGapPx = 8.dp.roundToPx()
-
-        val rows = mutableListOf<List<androidx.compose.ui.layout.Placeable>>()
-        val rowWidths = mutableListOf<Int>()
-        val rowHeights = mutableListOf<Int>()
-
-        var currentRow = mutableListOf<androidx.compose.ui.layout.Placeable>()
-        var currentRowWidth = 0
-        var currentRowHeight = 0
-
-        measurables.forEach { measurable ->
-            val placeable = measurable.measure(constraints)
-
-            if (currentRow.isNotEmpty() && currentRowWidth + hGapPx + placeable.width > constraints.maxWidth) {
-                rows.add(currentRow)
-                rowWidths.add(currentRowWidth)
-                rowHeights.add(currentRowHeight)
-                currentRow = mutableListOf()
-                currentRowWidth = 0
-                currentRowHeight = 0
-            }
-
-            currentRow.add(placeable)
-            currentRowWidth += if (currentRow.size == 1) placeable.width else hGapPx + placeable.width
-            currentRowHeight = maxOf(currentRowHeight, placeable.height)
-        }
-
-        if (currentRow.isNotEmpty()) {
-            rows.add(currentRow)
-            rowWidths.add(currentRowWidth)
-            rowHeights.add(currentRowHeight)
-        }
-
-        val width = constraints.maxWidth
-        val height = rowHeights.sum() + (rowHeights.size - 1).coerceAtLeast(0) * vGapPx
-
-        layout(width, height) {
-            var y = 0
-            rows.forEachIndexed { rowIndex, row ->
-                var x = when (horizontalArrangement) {
-                    Arrangement.Center -> (width - rowWidths[rowIndex]) / 2
-                    Arrangement.End -> width - rowWidths[rowIndex]
-                    else -> 0
-                }
-
-                row.forEach { placeable ->
-                    placeable.placeRelative(x, y)
-                    x += placeable.width + hGapPx
-                }
-
-                y += rowHeights[rowIndex] + vGapPx
-            }
         }
     }
 }
