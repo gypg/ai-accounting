@@ -15,10 +15,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.aiaccounting.R
 import com.example.aiaccounting.data.local.entity.Account
 import com.example.aiaccounting.data.local.entity.AccountType
 import com.example.aiaccounting.ui.components.ColorSelector
@@ -252,24 +256,11 @@ fun AccountCard(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 账户图标
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(Color(android.graphics.Color.parseColor(account.color))),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = getAccountIcon(account.type),
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-            
+            // 账户图标 - 使用品牌色和卡组织图标
+            AccountIconBox(type = account.type, accountName = account.name)
+
             Spacer(modifier = Modifier.width(16.dp))
-            
+
             // 账户信息
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -283,7 +274,7 @@ fun AccountCard(
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
             }
-            
+
             // 余额
             Column(horizontalAlignment = Alignment.End) {
                 Text(
@@ -300,7 +291,7 @@ fun AccountCard(
                     )
                 }
             }
-            
+
             // 操作按钮
             Row {
                 IconButton(onClick = onEdit) {
@@ -319,6 +310,159 @@ fun AccountCard(
                 }
             }
         }
+    }
+}
+
+/**
+ * 账户图标组件 - 使用品牌经典颜色和卡组织图标
+ */
+@Composable
+fun AccountIconBox(type: AccountType, accountName: String = "") {
+    // 检测卡组织
+    val cardNetwork = detectCardNetwork(accountName)
+
+    // 品牌经典颜色
+    val brandColor = when (type) {
+        AccountType.WECHAT -> Color(0xFF07C160)      // 微信经典绿色
+        AccountType.ALIPAY -> Color(0xFF1677FF)      // 支付宝经典蓝色
+        AccountType.CASH -> Color(0xFFFF9800)        // 现金橙色
+        AccountType.BANK -> Color(0xFF2196F3)        // 银行卡蓝色
+        AccountType.CREDIT_CARD -> when (cardNetwork) {
+            CardNetwork.VISA -> Color(0xFF1A1F71)        // Visa蓝
+            CardNetwork.MASTERCARD -> Color(0xFFEB001B)  // Mastercard红
+            CardNetwork.UNIONPAY -> Color(0xFFE21836)    // 银联红
+            CardNetwork.AMEX -> Color(0xFF016FD0)        // 运通蓝
+            else -> Color(0xFF9C27B0)                     // 默认紫色
+        }
+        AccountType.DEBIT_CARD -> when (cardNetwork) {
+            CardNetwork.VISA -> Color(0xFF1A1F71)
+            CardNetwork.MASTERCARD -> Color(0xFFEB001B)
+            CardNetwork.UNIONPAY -> Color(0xFFE21836)
+            CardNetwork.AMEX -> Color(0xFF016FD0)
+            else -> Color(0xFF4CAF50)
+        }
+        AccountType.OTHER -> Color(0xFF607D8B)       // 其他灰色
+    }
+
+    // 图标背景色（浅色版本）
+    val backgroundColor = when (type) {
+        AccountType.WECHAT -> Color(0xFFE8F5E9)      // 微信浅绿背景
+        AccountType.ALIPAY -> Color(0xFFE6F7FF)      // 支付宝浅蓝背景
+        AccountType.CASH -> Color(0xFFFFF3E0)        // 现金浅橙背景
+        AccountType.BANK -> Color(0xFFE3F2FD)        // 银行卡浅蓝背景
+        AccountType.CREDIT_CARD, AccountType.DEBIT_CARD -> when (cardNetwork) {
+            CardNetwork.VISA -> Color(0xFFE8EAF6)      // Visa浅蓝背景
+            CardNetwork.MASTERCARD -> Color(0xFFFFEBEE) // Mastercard浅红背景
+            CardNetwork.UNIONPAY -> Color(0xFFFFEBEE)   // 银联浅红背景
+            CardNetwork.AMEX -> Color(0xFFE3F2FD)       // 运通浅蓝背景
+            else -> Color(0xFFF3E5F5)                    // 默认浅紫背景
+        }
+        AccountType.OTHER -> Color(0xFFECEFF1)       // 其他浅灰背景
+    }
+
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(backgroundColor),
+        contentAlignment = Alignment.Center
+    ) {
+        // 根据账户类型显示对应图标
+        when (type) {
+            // 微信使用品牌图标
+            AccountType.WECHAT -> {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_wechat),
+                    contentDescription = "微信",
+                    modifier = Modifier.size(40.dp),
+                    tint = Color.Unspecified
+                )
+            }
+            // 支付宝使用品牌图标
+            AccountType.ALIPAY -> {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_alipay),
+                    contentDescription = "支付宝",
+                    modifier = Modifier.size(40.dp),
+                    tint = Color.Unspecified
+                )
+            }
+            // 信用卡/借记卡显示卡组织图标
+            AccountType.CREDIT_CARD, AccountType.DEBIT_CARD -> {
+                if (cardNetwork != CardNetwork.UNKNOWN) {
+                    CardNetworkIcon(cardNetwork = cardNetwork, modifier = Modifier.size(32.dp))
+                } else {
+                    Icon(
+                        imageVector = getAccountIcon(type),
+                        contentDescription = null,
+                        tint = brandColor,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
+            // 其他类型使用默认图标
+            else -> {
+                Icon(
+                    imageVector = getAccountIcon(type),
+                    contentDescription = null,
+                    tint = brandColor,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 卡组织类型
+ */
+enum class CardNetwork {
+    VISA, MASTERCARD, UNIONPAY, AMEX, UNKNOWN
+}
+
+/**
+ * 检测卡组织 - 根据账户名称识别
+ */
+fun detectCardNetwork(accountName: String): CardNetwork {
+    val name = accountName.uppercase()
+    return when {
+        name.contains("VISA") || name.contains("维萨") -> CardNetwork.VISA
+        name.contains("MASTER") || name.contains("万事达") -> CardNetwork.MASTERCARD
+        name.contains("UNION") || name.contains("银联") || name.contains("云闪付") -> CardNetwork.UNIONPAY
+        name.contains("AMEX") || name.contains("AMERICAN") || name.contains("运通") || name.contains("美国运通") -> CardNetwork.AMEX
+        else -> CardNetwork.UNKNOWN
+    }
+}
+
+/**
+ * 卡组织图标组件
+ */
+@Composable
+fun CardNetworkIcon(cardNetwork: CardNetwork, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val drawableRes = when (cardNetwork) {
+        CardNetwork.VISA -> R.drawable.ic_visa
+        CardNetwork.MASTERCARD -> R.drawable.ic_mastercard
+        CardNetwork.UNIONPAY -> R.drawable.ic_unionpay
+        CardNetwork.AMEX -> R.drawable.ic_amex
+        CardNetwork.UNKNOWN -> null
+    }
+
+    if (drawableRes != null) {
+        Icon(
+            painter = painterResource(id = drawableRes),
+            contentDescription = cardNetwork.name,
+            modifier = modifier,
+            tint = Color.Unspecified // 保持原始颜色
+        )
+    } else {
+        // 未知卡组织显示默认信用卡图标
+        Icon(
+            imageVector = Icons.Default.CreditCard,
+            contentDescription = "信用卡",
+            modifier = modifier,
+            tint = Color(0xFF9C27B0)
+        )
     }
 }
 

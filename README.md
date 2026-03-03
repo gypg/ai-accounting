@@ -88,10 +88,13 @@ app/src/main/java/com/example/aiaccounting/
 - 支持生物识别保护
 - AI功能需要配置自己的API Key，数据直接发送给AI服务商
 
-## 相关项目
+## 相关项目与致谢
 
 - [EasyAccounts](https://github.com/QingHeYang/EasyAccounts) - 优秀的中文家庭记账软件，支持Docker部署
+- [Payment Webfont](https://github.com/orlandotm/payment-webfont) - 支付系统图标库，本项目银行卡图标参考自此项目
 
 ## 开源协议
+
+MIT License
 
 MIT License
