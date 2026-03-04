@@ -1,8 +1,10 @@
-name: Build APK
+name: Build and Release APK
 
 on:
   push:
     branches: [ main, master ]
+    tags:
+      - 'v*'
   pull_request:
     branches: [ main, master ]
   workflow_dispatch:
@@ -32,14 +34,74 @@ jobs:
     - name: Build Debug APK
       run: gradle assembleDebug --rerun-tasks
 
+    - name: Build Release APK
+      run: gradle assembleRelease --rerun-tasks
+
     - name: Upload Debug APK
       uses: actions/upload-artifact@v4
       with:
         name: debug-apk
         path: app/build/outputs/apk/debug/app-debug.apk
+        retention-days: 30
 
     - name: Upload Release APK
       uses: actions/upload-artifact@v4
       with:
         name: release-apk
         path: app/build/outputs/apk/release/app-release-unsigned.apk
+        retention-days: 30
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download Debug APK
+      uses: actions/download-artifact@v4
+      with:
+        name: debug-apk
+        path: ./apk
+
+    - name: Download Release APK
+      uses: actions/download-artifact@v4
+      with:
+        name: release-apk
+        path: ./apk
+
+    - name: Rename APKs
+      run: |
+        mv ./apk/app-debug.apk ./apk/AI-Accounting-debug.apk
+        mv ./apk/app-release-unsigned.apk ./apk/AI-Accounting-release.apk
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          ./apk/AI-Accounting-debug.apk
+          ./apk/AI-Accounting-release.apk
+        body: |
+          ## AI记账 Android App
+          
+          ### 下载说明
+          - **AI-Accounting-debug.apk**: Debug版本（推荐测试使用）
+          - **AI-Accounting-release.apk**: Release版本（未签名，可自行签名后安装）
+          
+          ### 功能特点
+          - AI智能记账：自然语言输入，自动识别金额、分类
+          - 图片识别记账：拍照识别收据自动记账
+          - 多账户管理：支持现金、银行卡、支付宝、微信等
+          - 桌面小组件：5种尺寸小组件，快速记账
+          - 数据安全：本地加密存储，支持指纹/面部识别
+          
+          ### 开源项目
+          本项目使用了众多优秀的开源项目，详见 [ACKNOWLEDGMENTS.md](https://github.com/${{ github.repository }}/blob/main/ACKNOWLEDGMENTS.md)
+          
+          ### 许可证
+          [MIT License](https://github.com/${{ github.repository }}/blob/main/LICENSE)
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
