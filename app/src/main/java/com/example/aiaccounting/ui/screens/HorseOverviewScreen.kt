@@ -1,0 +1,819 @@
+package com.example.aiaccounting.ui.screens
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.aiaccounting.data.local.entity.TransactionType
+import com.example.aiaccounting.ui.components.*
+import com.example.aiaccounting.ui.theme.HorseTheme2026Colors
+import com.example.aiaccounting.ui.viewmodel.OverviewViewModel
+import java.text.SimpleDateFormat
+import java.util.*
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HorseOverviewScreen(
+    viewModel: OverviewViewModel = hiltViewModel(),
+    onNavigateToAddTransaction: () -> Unit = {},
+    onNavigateToAI: () -> Unit = {},
+    onNavigateToTransactions: () -> Unit = {},
+    onNavigateToStatistics: () -> Unit = {}
+) {
+    val monthlyStats by viewModel.monthlyStats.collectAsState()
+    val recentTransactions by viewModel.recentTransactions.collectAsState()
+    val yearlyTrendData by viewModel.yearlyTrendData.collectAsState()
+    val accounts by viewModel.accounts.collectAsState()
+    val todayStats by viewModel.todayStats.collectAsState()
+    val weekStats by viewModel.weekStats.collectAsState()
+
+    val calendar = Calendar.getInstance()
+    val currentYear = calendar.get(Calendar.YEAR)
+    val currentMonth = calendar.get(Calendar.MONTH) + 1
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        IconButton(onClick = { }) {
+                            Icon(
+                                imageVector = Icons.Default.ChevronLeft,
+                                contentDescription = "上一年",
+                                tint = HorseTheme2026Colors.TextSecondary
+                            )
+                        }
+                        Text(
+                            text = "${currentYear}年度",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = HorseTheme2026Colors.TextPrimary
+                        )
+                        IconButton(onClick = { }) {
+                            Icon(
+                                imageVector = Icons.Default.ChevronRight,
+                                contentDescription = "下一年",
+                                tint = HorseTheme2026Colors.TextSecondary
+                            )
+                        }
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent
+                )
+            )
+        },
+        containerColor = Color.Transparent,
+        floatingActionButton = {
+            AIButton(onClick = onNavigateToAI)
+        }
+    ) { padding ->
+        HorseBackground {
+            Box(modifier = Modifier.fillMaxSize()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp)
+                ) {
+                    // 年度收支概览 - 真实数据
+                    YearlySummaryCard(
+                        totalIncome = monthlyStats.totalIncome,
+                        totalExpense = monthlyStats.totalExpense,
+                        balance = monthlyStats.totalIncome - monthlyStats.totalExpense
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 快捷功能卡片 - 真实数据
+                    QuickActionCards(
+                        currentMonth = currentMonth,
+                        monthlyIncome = monthlyStats.monthlyIncome,
+                        monthlyExpense = monthlyStats.monthlyExpense,
+                        yearlyExpense = monthlyStats.totalExpense,
+                        accountCount = accounts.size,
+                        onNavigateToTransactions = onNavigateToTransactions,
+                        onNavigateToStatistics = onNavigateToStatistics
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 本月支出趋势（真实数据）
+                    MonthlyTrendCard(yearlyTrendData = yearlyTrendData)
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 支出分类占比（基于真实交易数据）
+                    CategorySummaryCard(recentTransactions = recentTransactions)
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 最近交易（真实数据）
+                    RecentTransactionsCard(transactions = recentTransactions)
+
+                    Spacer(modifier = Modifier.height(120.dp))
+                }
+
+                // 底部装饰
+                BottomHorseDecoration(
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun YearlySummaryCard(
+    totalIncome: Double,
+    totalExpense: Double,
+    balance: Double
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = HorseTheme2026Colors.CardBackground
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                // 收入
+                SummaryItem(
+                    label = "收入",
+                    amount = "¥${String.format("%.2f", totalIncome)}",
+                    color = HorseTheme2026Colors.Income,
+                    icon = Icons.AutoMirrored.Filled.TrendingUp
+                )
+
+                // 支出 - 使用高对比度颜色
+                SummaryItem(
+                    label = "支出",
+                    amount = "¥${String.format("%.2f", totalExpense)}",
+                    color = HorseTheme2026Colors.Expense,
+                    icon = Icons.AutoMirrored.Filled.TrendingDown
+                )
+
+                // 结余
+                SummaryItem(
+                    label = "结余",
+                    amount = "¥${String.format("%.2f", balance)}",
+                    color = HorseTheme2026Colors.Gold,
+                    icon = Icons.Default.AccountBalance
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun SummaryItem(
+    label: String,
+    amount: String,
+    color: Color,
+    icon: ImageVector
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // 图标
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(color.copy(alpha = 0.2f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = color,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = label,
+            color = HorseTheme2026Colors.TextSecondary,
+            fontSize = 12.sp
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = amount,
+            color = color,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+@Composable
+fun QuickActionCards(
+    currentMonth: Int,
+    monthlyIncome: Double,
+    monthlyExpense: Double,
+    yearlyExpense: Double,
+    accountCount: Int,
+    onNavigateToTransactions: () -> Unit,
+    onNavigateToStatistics: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // 方框1：日历信息（自动跟踪日历）
+        val today = Calendar.getInstance()
+        val currentYear = today.get(Calendar.YEAR)
+        val currentMonthNum = today.get(Calendar.MONTH) + 1
+        val currentDay = today.get(Calendar.DAY_OF_MONTH)
+        
+        ActionCard(
+            title = "日历",
+            subtitle = "",
+            icon = Icons.Default.CalendarMonth,
+            content = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // 年份（放大）
+                    Text(
+                        text = "$currentYear",
+                        color = HorseTheme2026Colors.TextPrimary,
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Bold,
+                        lineHeight = 34.sp
+                    )
+                    // 月份和日期
+                    Text(
+                        text = "${currentMonthNum}月${currentDay}日",
+                        color = HorseTheme2026Colors.Gold,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    // 星期
+                    val weekDays = listOf("周日", "周一", "周二", "周三", "周四", "周五", "周六")
+                    Text(
+                        text = weekDays[today.get(Calendar.DAY_OF_WEEK) - 1],
+                        color = HorseTheme2026Colors.TextSecondary,
+                        fontSize = 12.sp
+                    )
+                }
+            },
+            modifier = Modifier.weight(1f)
+        )
+        
+        // 方框2：月度收支数据（实时同步数据库）
+        ActionCard(
+            title = "本月收支",
+            subtitle = "",
+            icon = Icons.Default.AccountBalanceWallet,
+            content = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // 收入
+                    val incomeText = if (monthlyIncome >= 10000) {
+                        "${(monthlyIncome / 10000).toInt()}万"
+                    } else {
+                        monthlyIncome.toInt().toString()
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "收",
+                            color = HorseTheme2026Colors.TextSecondary,
+                            fontSize = 11.sp,
+                            modifier = Modifier.width(20.dp)
+                        )
+                        Text(
+                            text = "¥$incomeText",
+                            color = HorseTheme2026Colors.Income,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(4.dp))
+                    
+                    // 支出
+                    val expenseText = if (monthlyExpense >= 10000) {
+                        "${(monthlyExpense / 10000).toInt()}万"
+                    } else {
+                        monthlyExpense.toInt().toString()
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "支",
+                            color = HorseTheme2026Colors.TextSecondary,
+                            fontSize = 11.sp,
+                            modifier = Modifier.width(20.dp)
+                        )
+                        Text(
+                            text = "¥$expenseText",
+                            color = HorseTheme2026Colors.Expense,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            },
+            modifier = Modifier.weight(1f)
+        )
+
+        // 账户明细 - 仅展示数据，无点击跳转
+        ActionCard(
+            title = "账户明细",
+            icon = Icons.Default.Receipt,
+            content = {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(HorseTheme2026Colors.Gold.copy(alpha = 0.2f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Receipt,
+                            contentDescription = null,
+                            tint = HorseTheme2026Colors.Gold,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "${accountCount}个账户",
+                        color = HorseTheme2026Colors.TextSecondary,
+                        fontSize = 11.sp
+                    )
+                }
+            },
+            modifier = Modifier.weight(1f)
+        )
+
+        // 年度趋势 - 仅展示数据，无点击跳转
+        ActionCard(
+            title = "年度趋势",
+            icon = Icons.Default.ShowChart,
+            content = {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(HorseTheme2026Colors.Gold.copy(alpha = 0.2f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ShowChart,
+                            contentDescription = null,
+                            tint = HorseTheme2026Colors.Gold,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "¥${String.format("%.2f", yearlyExpense)}",
+                        color = HorseTheme2026Colors.Gold,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+fun ActionCard(
+    title: String,
+    subtitle: String? = null,
+    icon: ImageVector,
+    content: @Composable () -> Unit,
+    onClick: () -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .clickable(onClick = onClick)
+            .height(130.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = HorseTheme2026Colors.CardBackground
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(10.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = title,
+                    tint = HorseTheme2026Colors.Gold,
+                    modifier = Modifier.size(14.dp)
+                )
+                Text(
+                    text = title,
+                    color = HorseTheme2026Colors.TextSecondary,
+                    fontSize = 11.sp
+                )
+            }
+            subtitle?.let {
+                Text(
+                    text = it,
+                    color = HorseTheme2026Colors.TextPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            content()
+        }
+    }
+}
+
+@Composable
+fun MonthlyTrendCard(yearlyTrendData: List<com.example.aiaccounting.ui.components.charts.MonthlyData>) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = HorseTheme2026Colors.CardBackground
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "年度收支趋势",
+                    color = HorseTheme2026Colors.TextPrimary,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.TrendingUp,
+                    contentDescription = null,
+                    tint = HorseTheme2026Colors.Gold,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // 基于真实数据的趋势图
+            if (yearlyTrendData.isNotEmpty()) {
+                val maxExpense = yearlyTrendData.maxOfOrNull { it.expense }?.coerceAtLeast(1.0) ?: 1.0
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(80.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    yearlyTrendData.take(7).forEach { data ->
+                        val value = (data.expense / maxExpense).toFloat().coerceIn(0f, 1f)
+                        Box(
+                            modifier = Modifier
+                                .width(8.dp)
+                                .fillMaxHeight(if (value < 0.1f) 0.1f else value)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(
+                                    brush = Brush.verticalGradient(
+                                        colors = listOf(
+                                            HorseTheme2026Colors.Gold,
+                                            HorseTheme2026Colors.Gold.copy(alpha = 0.5f)
+                                        )
+                                    )
+                                )
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    yearlyTrendData.take(7).forEach { data ->
+                        Text(
+                            text = data.month,
+                            color = HorseTheme2026Colors.TextSecondary,
+                            fontSize = 10.sp
+                        )
+                    }
+                }
+            } else {
+                // 无数据提示
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(80.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "暂无数据",
+                        color = HorseTheme2026Colors.TextSecondary,
+                        fontSize = 14.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CategorySummaryCard(
+    recentTransactions: List<com.example.aiaccounting.data.local.entity.Transaction>
+) {
+    // 从真实交易计算分类统计
+    val categoryStats = rememberCategoryStats(recentTransactions)
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = HorseTheme2026Colors.CardBackground
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "支出分类占比",
+                    color = HorseTheme2026Colors.TextPrimary,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Icon(
+                    imageVector = Icons.Default.PieChart,
+                    contentDescription = null,
+                    tint = HorseTheme2026Colors.Gold,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+
+            if (categoryStats.isNotEmpty()) {
+                categoryStats.take(4).forEachIndexed { index, stat ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stat.name,
+                            color = HorseTheme2026Colors.TextSecondary,
+                            fontSize = 12.sp,
+                            modifier = Modifier.width(50.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        LinearProgressIndicator(
+                            progress = { stat.percentage },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp)),
+                            color = stat.color,
+                            trackColor = HorseTheme2026Colors.TextSecondary.copy(alpha = 0.1f)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "${(stat.percentage * 100).toInt()}%",
+                            color = HorseTheme2026Colors.TextPrimary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    if (index < categoryStats.size - 1 && index < 3) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+            } else {
+                Text(
+                    text = "暂无支出数据",
+                    color = HorseTheme2026Colors.TextSecondary,
+                    fontSize = 14.sp
+                )
+            }
+        }
+    }
+}
+
+// 分类统计数据类
+data class OverviewCategoryStat(
+    val name: String,
+    val amount: Double,
+    val percentage: Float,
+    val color: Color
+)
+
+@Composable
+fun rememberCategoryStats(
+    transactions: List<com.example.aiaccounting.data.local.entity.Transaction>
+): List<OverviewCategoryStat> {
+    return androidx.compose.runtime.remember(transactions) {
+        val expenseTransactions = transactions.filter { it.type == TransactionType.EXPENSE }
+        val totalExpense = expenseTransactions.sumOf { it.amount }
+
+        if (totalExpense <= 0) return@remember emptyList()
+
+        expenseTransactions
+            .groupBy { it.categoryId }
+            .map { (categoryId, transList) ->
+                val amount = transList.sumOf { it.amount }
+                val categoryName = when (categoryId) {
+                    1L -> "餐饮"
+                    2L -> "购物"
+                    3L -> "交通"
+                    4L -> "娱乐"
+                    5L -> "居住"
+                    6L -> "医疗"
+                    7L -> "教育"
+                    8L -> "其他"
+                    else -> "未分类"
+                }
+                val color = when (categoryId % 5) {
+                    0L -> HorseTheme2026Colors.Expense
+                    1L -> HorseTheme2026Colors.Gold
+                    2L -> HorseTheme2026Colors.Income
+                    3L -> HorseTheme2026Colors.BlueCard
+                    else -> HorseTheme2026Colors.Warning
+                }
+                OverviewCategoryStat(
+                    name = categoryName,
+                    amount = amount,
+                    percentage = (amount / totalExpense).toFloat().coerceIn(0f, 1f),
+                    color = color
+                )
+            }
+            .sortedByDescending { it.amount }
+    }
+}
+
+@Composable
+fun RecentTransactionsCard(
+    transactions: List<com.example.aiaccounting.data.local.entity.Transaction>
+) {
+    val dateFormat = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
+    val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = HorseTheme2026Colors.CardBackground
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "最近交易",
+                    color = HorseTheme2026Colors.TextPrimary,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "查看更多",
+                    color = HorseTheme2026Colors.Gold,
+                    fontSize = 12.sp,
+                    modifier = Modifier.clickable { }
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+
+            if (transactions.isNotEmpty()) {
+                transactions.take(5).forEachIndexed { index, transaction ->
+                    val isExpense = transaction.type == TransactionType.EXPENSE
+                    val amountColor = if (isExpense) HorseTheme2026Colors.Expense else HorseTheme2026Colors.Income
+                    val amountPrefix = if (isExpense) "-" else "+"
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(
+                                        if (isExpense)
+                                            HorseTheme2026Colors.Expense.copy(alpha = 0.2f)
+                                        else
+                                            HorseTheme2026Colors.Income.copy(alpha = 0.2f)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (isExpense) Icons.Default.ShoppingCart else Icons.Default.AttachMoney,
+                                    contentDescription = null,
+                                    tint = amountColor,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = transaction.note.takeIf { it.isNotBlank() } ?: "未备注",
+                                    color = HorseTheme2026Colors.TextPrimary,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = dateFormat.format(Date(transaction.date)),
+                                    color = HorseTheme2026Colors.TextSecondary,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                        Text(
+                            text = "$amountPrefix¥${String.format("%.2f", transaction.amount)}",
+                            color = amountColor,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    if (index < transactions.size - 1 && index < 4) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                    }
+                }
+            } else {
+                Text(
+                    text = "暂无交易记录",
+                    color = HorseTheme2026Colors.TextSecondary,
+                    fontSize = 14.sp
+                )
+            }
+        }
+    }
+}
