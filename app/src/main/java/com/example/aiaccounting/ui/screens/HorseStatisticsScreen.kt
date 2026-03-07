@@ -74,7 +74,7 @@ fun HorseStatisticsScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
         ) {
-            val timeDisplayText = getTimeDisplayText(uiState.timeFilter)
+            val timeDisplayText = getHorseTimeDisplayText(uiState.timeFilter)
             if (timeDisplayText.isNotEmpty()) {
                 Card(
                     modifier = Modifier
@@ -180,15 +180,7 @@ fun HorseStatisticsScreen(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         PieChart(
-                            data = statistics.categoryStats.map { it.percentage },
-                            colors = statistics.categoryStats.map { 
-                                try {
-                                    android.graphics.Color.parseColor(it.color)
-                                } catch (e: Exception) {
-                                    android.graphics.Color.GRAY
-                                }
-                            },
-                            labels = statistics.categoryStats.map { it.name },
+                            data = statistics.categoryStats,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(200.dp)
@@ -296,7 +288,7 @@ fun HorseStatCard(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = NumberUtils.formatCurrency(amount),
+                text = NumberUtils.formatMoney(amount),
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 color = color
@@ -361,7 +353,7 @@ fun CategoryStatItem(stat: CategoryStat) {
             )
         }
         Text(
-            text = "${NumberUtils.formatCurrency(stat.amount)} (${(stat.percentage * 100).toInt()}%)",
+            text = "${NumberUtils.formatMoney(stat.amount)} (${(stat.percentage * 100).toInt()}%)",
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
             color = Color.DarkGray
@@ -444,7 +436,7 @@ fun HorseDatePickerDialog(
     }
 }
 
-private fun getTimeDisplayText(timeFilter: String): String {
+private fun getHorseTimeDisplayText(timeFilter: String): String {
     return when {
         timeFilter == "current" -> {
             val calendar = java.util.Calendar.getInstance()
