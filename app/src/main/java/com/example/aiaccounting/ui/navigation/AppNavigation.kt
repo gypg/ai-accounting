@@ -50,6 +50,7 @@ fun AppNavigation(
     navController: NavHostController,
     startDestination: String,
     appStateManager: AppStateManager,
+    isHorseTheme: Boolean = false,
     onSetupComplete: (String) -> Unit = {},
     onLoginSuccess: (String) -> Unit = {},
     onInitialSetupComplete: () -> Unit = {},
@@ -135,78 +136,146 @@ fun AppNavigation(
 
             // 总览 (使用底部导航)
             composable("overview") {
-                OverviewScreen(
-                    onNavigateToAddTransaction = {
-                        navController.navigate(Screen.AddTransaction.route)
-                    },
-                    onNavigateToAI = {
-                        navController.navigate(Screen.AIAssistant.route)
-                    }
-                )
+                if (isHorseTheme) {
+                    HorseOverviewScreen(
+                        onNavigateToAddTransaction = {
+                            navController.navigate(Screen.AddTransaction.route)
+                        },
+                        onNavigateToAI = {
+                            navController.navigate(Screen.AIAssistant.route)
+                        }
+                    )
+                } else {
+                    OverviewScreen(
+                        onNavigateToAddTransaction = {
+                            navController.navigate(Screen.AddTransaction.route)
+                        },
+                        onNavigateToAI = {
+                            navController.navigate(Screen.AIAssistant.route)
+                        }
+                    )
+                }
             }
 
             // 明细 (使用底部导航)
             composable("transactions") {
-                TransactionListScreen(
-                    onNavigateToAddTransaction = {
-                        navController.navigate(Screen.AddTransaction.route)
-                    },
-                    onNavigateToExport = {
-                        navController.navigate(Screen.Export.route)
-                    }
-                )
+                if (isHorseTheme) {
+                    HorseTransactionScreen(
+                        onNavigateToAddTransaction = {
+                            navController.navigate(Screen.AddTransaction.route)
+                        }
+                    )
+                } else {
+                    TransactionListScreen(
+                        onNavigateToAddTransaction = {
+                            navController.navigate(Screen.AddTransaction.route)
+                        },
+                        onNavigateToExport = {
+                            navController.navigate(Screen.Export.route)
+                        }
+                    )
+                }
             }
 
             // 统计 (使用底部导航)
             composable("statistics") {
-                StatisticsScreen()
+                if (isHorseTheme) {
+                    HorseStatisticsScreen()
+                } else {
+                    StatisticsScreen()
+                }
             }
 
             // 设置 (使用底部导航)
             composable("settings") {
-                SettingsScreen(
-                    appStateManager = appStateManager,
-                    onNavigateBack = {
-                        navController.navigate("overview") {
-                            popUpTo("overview") { inclusive = true }
-                        }
-                    },
-                    onNavigateToProfile = {
-                        navController.navigate(Screen.Profile.route)
-                    },
-                    onNavigateToAIModelSettings = {
-                        navController.navigate(Screen.AIModelSettings.route)
-                    },
-                    onNavigateToAccounts = {
-                        navController.navigate(Screen.Accounts.route)
-                    },
-                    onNavigateToCategories = {
-                        navController.navigate(Screen.Categories.route)
-                    },
-                    onNavigateToExport = {
-                        navController.navigate(Screen.Export.route)
-                    },
-                    onNavigateToTemplates = {
-                        navController.navigate(Screen.Templates.route)
-                    },
-                    onNavigateToImport = {
-                        navController.navigate(Screen.Import.route)
-                    },
-                    onNavigateToAISettings = {
-                        navController.navigate(Screen.AISettings.route)
-                    },
-                    onNavigateToBudgets = {
-                        navController.navigate(Screen.Budgets.route)
-                    },
-                    onLogout = {
-                        // 清除登录状态并跳转到登录页面
-                        appStateManager.setLoggedIn(false)
-                        navController.navigate(Screen.Login.route) {
-                            popUpTo(0) { inclusive = true }
-                        }
-                    },
-                    onThemeChanged = onThemeChanged
-                )
+                if (isHorseTheme) {
+                    HorseSettingsScreen(
+                        appStateManager = appStateManager,
+                        onNavigateBack = {
+                            navController.navigate("overview") {
+                                popUpTo("overview") { inclusive = true }
+                            }
+                        },
+                        onNavigateToProfile = {
+                            navController.navigate(Screen.Profile.route)
+                        },
+                        onNavigateToAIModelSettings = {
+                            navController.navigate(Screen.AIModelSettings.route)
+                        },
+                        onNavigateToAccounts = {
+                            navController.navigate(Screen.Accounts.route)
+                        },
+                        onNavigateToCategories = {
+                            navController.navigate(Screen.Categories.route)
+                        },
+                        onNavigateToExport = {
+                            navController.navigate(Screen.Export.route)
+                        },
+                        onNavigateToTemplates = {
+                            navController.navigate(Screen.Templates.route)
+                        },
+                        onNavigateToImport = {
+                            navController.navigate(Screen.Import.route)
+                        },
+                        onNavigateToAISettings = {
+                            navController.navigate(Screen.AISettings.route)
+                        },
+                        onNavigateToBudgets = {
+                            navController.navigate(Screen.Budgets.route)
+                        },
+                        onLogout = {
+                            appStateManager.setLoggedIn(false)
+                            navController.navigate(Screen.Login.route) {
+                                popUpTo(0) { inclusive = true }
+                            }
+                        },
+                        onThemeChanged = onThemeChanged
+                    )
+                } else {
+                    SettingsScreen(
+                        appStateManager = appStateManager,
+                        onNavigateBack = {
+                            navController.navigate("overview") {
+                                popUpTo("overview") { inclusive = true }
+                            }
+                        },
+                        onNavigateToProfile = {
+                            navController.navigate(Screen.Profile.route)
+                        },
+                        onNavigateToAIModelSettings = {
+                            navController.navigate(Screen.AIModelSettings.route)
+                        },
+                        onNavigateToAccounts = {
+                            navController.navigate(Screen.Accounts.route)
+                        },
+                        onNavigateToCategories = {
+                            navController.navigate(Screen.Categories.route)
+                        },
+                        onNavigateToExport = {
+                            navController.navigate(Screen.Export.route)
+                        },
+                        onNavigateToTemplates = {
+                            navController.navigate(Screen.Templates.route)
+                        },
+                        onNavigateToImport = {
+                            navController.navigate(Screen.Import.route)
+                        },
+                        onNavigateToAISettings = {
+                            navController.navigate(Screen.AISettings.route)
+                        },
+                        onNavigateToBudgets = {
+                            navController.navigate(Screen.Budgets.route)
+                        },
+                        onLogout = {
+                            // 清除登录状态并跳转到登录页面
+                            appStateManager.setLoggedIn(false)
+                            navController.navigate(Screen.Login.route) {
+                                popUpTo(0) { inclusive = true }
+                            }
+                        },
+                        onThemeChanged = onThemeChanged
+                    )
+                }
             }
 
             // Add Transaction

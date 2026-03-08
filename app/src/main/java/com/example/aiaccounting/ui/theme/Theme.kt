@@ -158,15 +158,18 @@ fun AIAccountingTheme(
 ) {
     val isSystemInDarkTheme = isSystemInDarkTheme()
     
-    val (darkTheme, amoledMode, dynamicMode) = when (themeSetting) {
-        "light" -> Triple(false, false, false)
-        "dark" -> Triple(true, false, false)
-        "amoled" -> Triple(true, true, false)
-        "dynamic" -> Triple(isSystemInDarkTheme, false, true)
-        else -> Triple(isSystemInDarkTheme, false, false) // system default
+    val (darkTheme, amoledMode, dynamicMode, horseTheme) = when (themeSetting) {
+        "light" -> Quadruple(false, false, false, false)
+        "dark" -> Quadruple(true, false, false, false)
+        "amoled" -> Quadruple(true, true, false, false)
+        "dynamic" -> Quadruple(isSystemInDarkTheme, false, true, false)
+        "horse2026" -> Quadruple(false, false, false, true)
+        else -> Quadruple(isSystemInDarkTheme, false, false, false) // system default
     }
     
     val colorScheme = when {
+        // 马年主题
+        horseTheme -> HorseTheme2026ColorScheme
         // Material You动态主题（Android 12+）
         dynamicMode && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
@@ -186,12 +189,12 @@ fun AIAccountingTheme(
             val window = (view.context as Activity).window
             // 设置状态栏颜色为透明，使用系统栏适配
             window.statusBarColor = Color.Transparent.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme && !horseTheme
             // 设置导航栏颜色
-            window.navigationBarColor = if (amoledMode) {
-                Color.Black.toArgb()
-            } else {
-                colorScheme.surface.toArgb()
+            window.navigationBarColor = when {
+                horseTheme -> HorseTheme2026Colors.Background.toArgb()
+                amoledMode -> Color.Black.toArgb()
+                else -> colorScheme.surface.toArgb()
             }
         }
     }
@@ -202,6 +205,9 @@ fun AIAccountingTheme(
         content = content
     )
 }
+
+// 辅助类用于返回四个值
+private data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
 
 // ==================== 主题工具函数 ====================
 

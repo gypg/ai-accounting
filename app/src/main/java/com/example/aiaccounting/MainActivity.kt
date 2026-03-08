@@ -47,10 +47,13 @@ class MainActivity : ComponentActivity() {
         setContent {
             // 使用remember来监听主题变化
             var themeKey by remember { mutableStateOf(0) }
-            
+
             // 读取当前主题设置
             val themeSetting = remember(themeKey) { appStateManager.getTheme() }
-            
+
+            // 判断是否为马年主题
+            val isHorseTheme = themeSetting == "horse2026"
+
             AIAccountingTheme(
                 themeSetting = themeSetting
             ) {
@@ -58,6 +61,7 @@ class MainActivity : ComponentActivity() {
                     securityManager = securityManager,
                     appStateManager = appStateManager,
                     themeKey = themeKey,
+                    isHorseTheme = isHorseTheme,
                     onThemeChanged = { themeKey++ },
                     onRequestStoragePermission = { requestStoragePermission() },
                     widgetAction = widgetAction
@@ -93,6 +97,7 @@ fun MainApp(
     securityManager: SecurityManager,
     appStateManager: AppStateManager,
     themeKey: Int,
+    isHorseTheme: Boolean,
     onThemeChanged: () -> Unit,
     onRequestStoragePermission: () -> Unit,
     widgetAction: String? = null
@@ -157,6 +162,7 @@ fun MainApp(
         navController = navController,
         startDestination = startDestination,
         appStateManager = appStateManager,
+        isHorseTheme = isHorseTheme,
         onSetupComplete = { pin ->
             globalPin = pin
             isLoggedIn = true

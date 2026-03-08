@@ -401,7 +401,8 @@ fun SettingsScreen(
             Triple("system", "跟随系统", "自动切换浅色/深色模式"),
             Triple("light", "浅色", "明亮的浅色主题"),
             Triple("dark", "深色", "深色主题，护眼模式"),
-            Triple("amoled", "AMOLED纯黑", "纯黑背景，OLED省电")
+            Triple("amoled", "AMOLED纯黑", "纯黑背景，OLED省电"),
+            Triple("horse2026", "🐴 马年主题", "2026马年新春特别主题，红色喜庆风格")
         )
 
         AlertDialog(
