@@ -16,6 +16,17 @@ data class AIConfig(
         const val KEY_API_URL = "ai_api_url"
         const val KEY_MODEL = "ai_model"
         const val KEY_ENABLED = "ai_enabled"
+        const val KEY_USE_BUILTIN = "ai_use_builtin" // 是否使用内置配置
+
+        // 内置默认配置 - 预置的AI服务
+        // 红月API - 无需用户手动配置，开箱即用
+        val BUILTIN_CONFIG = AIConfig(
+            provider = AIProvider.CUSTOM,
+            apiKey = "sk-FtzwT2aujsUgmItI32cOoeOulDl6vslI2a7iapJNDSnE49JM",
+            apiUrl = "https://hongyue.cloud/v1",
+            model = "openai/gpt-oss-120b",
+            isEnabled = true
+        )
 
         // 默认配置
         fun defaultFor(provider: AIProvider): AIConfig {
@@ -45,6 +56,15 @@ data class AIConfig(
                     apiUrl = "",
                     model = ""
                 )
+            }
+        }
+
+        // 获取实际使用的配置（优先使用内置配置）
+        fun getEffectiveConfig(userConfig: AIConfig, useBuiltin: Boolean): AIConfig {
+            return if (useBuiltin && BUILTIN_CONFIG.apiKey != "YOUR_API_KEY_HERE") {
+                BUILTIN_CONFIG
+            } else {
+                userConfig
             }
         }
     }

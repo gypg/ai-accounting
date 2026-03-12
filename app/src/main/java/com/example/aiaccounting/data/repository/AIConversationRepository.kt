@@ -151,6 +151,13 @@ class AIConversationRepository @Inject constructor(
     }
 
     /**
+     * Get recent conversations (alias for getRecentConversationsForContext)
+     */
+    suspend fun getRecentConversations(limit: Int = 10): List<AIConversation> {
+        return getRecentConversationsForContext(limit)
+    }
+
+    /**
      * Add user message
      */
     suspend fun addUserMessage(content: String, transactionId: Long? = null): Long {

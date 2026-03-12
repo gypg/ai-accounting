@@ -15,6 +15,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,6 +49,7 @@ fun HorseOverviewScreen(
     val recentTransactions by viewModel.recentTransactions.collectAsState()
     val yearlyTrendData by viewModel.yearlyTrendData.collectAsState()
     val accounts by viewModel.accounts.collectAsState()
+    val categories by viewModel.categories.collectAsState()
     val todayStats by viewModel.todayStats.collectAsState()
     val weekStats by viewModel.weekStats.collectAsState()
 
@@ -130,7 +135,10 @@ fun HorseOverviewScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // 支出分类占比（基于真实交易数据）
-                    CategorySummaryCard(recentTransactions = recentTransactions)
+                    CategorySummaryCard(
+                        recentTransactions = recentTransactions,
+                        categories = categories
+                    )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -146,6 +154,18 @@ fun HorseOverviewScreen(
                 )
             }
         }
+    }
+}
+
+/**
+ * 将十六进制颜色字符串转换为Compose Color
+ */
+private fun parseColor(colorString: String): Color {
+    return try {
+        val color = android.graphics.Color.parseColor(colorString)
+        Color(color)
+    } catch (e: Exception) {
+        HorseTheme2026Colors.Gold
     }
 }
 
@@ -485,7 +505,9 @@ fun ActionCard(
 }
 
 @Composable
-fun MonthlyTrendCard(yearlyTrendData: List<com.example.aiaccounting.ui.components.charts.MonthlyData>) {
+ fun MonthlyTrendCard(yearlyTrendData: List<com.example.aiaccounting.ui.components.charts.MonthlyData>) {
+    var selectedMonth by remember { mutableStateOf<com.example.aiaccounting.ui.components.charts.MonthlyData?>(null) }
+    
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -515,48 +537,141 @@ fun MonthlyTrendCard(yearlyTrendData: List<com.example.aiaccounting.ui.component
                     modifier = Modifier.size(20.dp)
                 )
             }
-            Spacer(modifier = Modifier.height(12.dp))
+            
+            // 图例
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.size(10.dp).background(Color(0xFF00E676), CircleShape))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("收入", color = HorseTheme2026Colors.TextSecondary, fontSize = 10.sp)
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.size(10.dp).background(Color(0xFF00B0FF), CircleShape))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("支出", color = HorseTheme2026Colors.TextSecondary, fontSize = 10.sp)
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
 
             // 基于真实数据的趋势图
             if (yearlyTrendData.isNotEmpty()) {
-                val maxExpense = yearlyTrendData.maxOfOrNull { it.expense }?.coerceAtLeast(1.0) ?: 1.0
+                // 计算最大值用于缩放
+                val maxValue = yearlyTrendData.maxOfOrNull { maxOf(it.income, it.expense) }?.coerceAtLeast(1.0) ?: 1.0
+                
+                // 显示7个月的数据
+                val displayData = yearlyTrendData.take(7)
+                
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(80.dp),
+                        .height(100.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.Bottom
                 ) {
-                    yearlyTrendData.take(7).forEach { data ->
-                        val value = (data.expense / maxExpense).toFloat().coerceIn(0f, 1f)
-                        Box(
+                    displayData.forEach { data ->
+                        val incomeHeight = (data.income / maxValue).toFloat().coerceIn(0.05f, 1f)
+                        val expenseHeight = (data.expense / maxValue).toFloat().coerceIn(0.05f, 1f)
+                        val isSelected = selectedMonth?.month == data.month
+                        
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier
-                                .width(8.dp)
-                                .fillMaxHeight(if (value < 0.1f) 0.1f else value)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(
-                                    brush = Brush.verticalGradient(
-                                        colors = listOf(
-                                            HorseTheme2026Colors.Gold,
-                                            HorseTheme2026Colors.Gold.copy(alpha = 0.5f)
-                                        )
+                                .width(36.dp)
+                                .clickable { selectedMonth = if (isSelected) null else data }
+                        ) {
+                            // 收入柱（绿色）
+                            Box(
+                                modifier = Modifier
+                                    .width(12.dp)
+                                    .height((incomeHeight * 40).dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(
+                                        if (isSelected) Color(0xFF00E676) 
+                                        else Color(0xFF00E676).copy(alpha = 0.8f)
                                     )
-                                )
-                        )
+                            )
+                            
+                            Spacer(modifier = Modifier.height(2.dp))
+                            
+                            // 支出柱（蓝色）
+                            Box(
+                                modifier = Modifier
+                                    .width(12.dp)
+                                    .height((expenseHeight * 40).dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(
+                                        if (isSelected) Color(0xFF00B0FF) 
+                                        else Color(0xFF00B0FF).copy(alpha = 0.8f)
+                                    )
+                            )
+                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(4.dp))
+                
+                // 月份标签 - 与柱状对齐
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    yearlyTrendData.take(7).forEach { data ->
+                    displayData.forEach { data ->
                         Text(
                             text = data.month,
                             color = HorseTheme2026Colors.TextSecondary,
-                            fontSize = 10.sp
+                            fontSize = 10.sp,
+                            modifier = Modifier.width(36.dp),
+                            textAlign = TextAlign.Center
                         )
+                    }
+                }
+                
+                // 显示选中的月份详情
+                selectedMonth?.let { data ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = HorseTheme2026Colors.Gold.copy(alpha = 0.2f)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = data.month,
+                                color = HorseTheme2026Colors.TextPrimary,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Row {
+                                Text(
+                                    text = "收: ¥${data.income.toInt()}",
+                                    color = Color(0xFF00E676),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = "支: ¥${data.expense.toInt()}",
+                                    color = Color(0xFF00B0FF),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
                     }
                 }
             } else {
@@ -564,7 +679,7 @@ fun MonthlyTrendCard(yearlyTrendData: List<com.example.aiaccounting.ui.component
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(80.dp),
+                        .height(100.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -580,10 +695,11 @@ fun MonthlyTrendCard(yearlyTrendData: List<com.example.aiaccounting.ui.component
 
 @Composable
 fun CategorySummaryCard(
-    recentTransactions: List<com.example.aiaccounting.data.local.entity.Transaction>
+    recentTransactions: List<com.example.aiaccounting.data.local.entity.Transaction>,
+    categories: List<com.example.aiaccounting.data.local.entity.Category>
 ) {
-    // 从真实交易计算分类统计
-    val categoryStats = rememberCategoryStats(recentTransactions)
+    // 从真实交易计算分类统计，使用真实的分类名称
+    val categoryStats = rememberCategoryStats(recentTransactions, categories)
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -671,35 +787,36 @@ data class OverviewCategoryStat(
 
 @Composable
 fun rememberCategoryStats(
-    transactions: List<com.example.aiaccounting.data.local.entity.Transaction>
+    transactions: List<com.example.aiaccounting.data.local.entity.Transaction>,
+    categories: List<com.example.aiaccounting.data.local.entity.Category>
 ): List<OverviewCategoryStat> {
-    return androidx.compose.runtime.remember(transactions) {
+    return remember(transactions, categories) {
         val expenseTransactions = transactions.filter { it.type == TransactionType.EXPENSE }
         val totalExpense = expenseTransactions.sumOf { it.amount }
 
         if (totalExpense <= 0) return@remember emptyList()
 
+        // 创建分类ID到名称的映射
+        val categoryMap = categories.associateBy { it.id }
+
         expenseTransactions
             .groupBy { it.categoryId }
             .map { (categoryId, transList) ->
                 val amount = transList.sumOf { it.amount }
-                val categoryName = when (categoryId) {
-                    1L -> "餐饮"
-                    2L -> "购物"
-                    3L -> "交通"
-                    4L -> "娱乐"
-                    5L -> "居住"
-                    6L -> "医疗"
-                    7L -> "教育"
-                    8L -> "其他"
-                    else -> "未分类"
-                }
-                val color = when (categoryId % 5) {
-                    0L -> HorseTheme2026Colors.Expense
-                    1L -> HorseTheme2026Colors.Gold
-                    2L -> HorseTheme2026Colors.Income
-                    3L -> HorseTheme2026Colors.BlueCard
-                    else -> HorseTheme2026Colors.Warning
+                // 从分类映射中获取真实名称，如果没有则显示"未分类"
+                val categoryName = categoryMap[categoryId]?.name ?: "未分类"
+                // 使用分类的颜色，如果没有则使用默认颜色
+                val categoryColorStr = categoryMap[categoryId]?.color
+                val color = if (categoryColorStr != null) {
+                    parseColor(categoryColorStr)
+                } else {
+                    when (categoryId % 5) {
+                        0L -> HorseTheme2026Colors.Expense
+                        1L -> HorseTheme2026Colors.Gold
+                        2L -> HorseTheme2026Colors.Income
+                        3L -> HorseTheme2026Colors.BlueCard
+                        else -> HorseTheme2026Colors.Warning
+                    }
                 }
                 OverviewCategoryStat(
                     name = categoryName,

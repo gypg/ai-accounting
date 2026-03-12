@@ -8,8 +8,6 @@ import android.content.Context
 import android.content.Intent
 import android.widget.RemoteViews
 import com.example.aiaccounting.R
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 
 /**
@@ -38,29 +36,29 @@ class WidgetProvider3x2 : AppWidgetProvider() {
             views.setTextViewText(R.id.tv_title, "${month}月收支")
 
             // 加载数据
-            GlobalScope.launch {
-                try {
-                    val prefs = context.getSharedPreferences("widget_stats", Context.MODE_PRIVATE)
-                    val income = prefs.getFloat("month_income", 0f)
-                    val expense = prefs.getFloat("month_expense", 0f)
-                    val budget = prefs.getFloat("month_budget", 5000f)
-                    val balance = income - expense
+            try {
+                val prefs = context.getSharedPreferences("widget_stats", Context.MODE_PRIVATE)
+                val income = prefs.getFloat("month_income", 0f)
+                val expense = prefs.getFloat("month_expense", 0f)
+                val budget = prefs.getFloat("month_budget", 5000f)
+                val balance = income - expense
 
-                    views.setTextViewText(R.id.tv_income, "¥${String.format("%.0f", income)}")
-                    views.setTextViewText(R.id.tv_expense, "¥${String.format("%.0f", expense)}")
-                    views.setTextViewText(R.id.tv_balance, "¥${String.format("%.0f", balance)}")
+                views.setTextViewText(R.id.tv_income, "¥${String.format("%.0f", income)}")
+                views.setTextViewText(R.id.tv_expense, "¥${String.format("%.0f", expense)}")
+                views.setTextViewText(R.id.tv_balance, "¥${String.format("%.0f", balance)}")
 
-                    // 更新预算进度
-                    val progress = if (budget > 0) {
-                        ((expense / budget) * 100).toInt().coerceIn(0, 100)
-                    } else 0
-                    views.setProgressBar(R.id.progress_budget, 100, progress, false)
-                    views.setTextViewText(R.id.tv_budget_info, "¥${String.format("%.0f", expense)} / ¥${String.format("%.0f", budget)}")
-
-                    appWidgetManager.updateAppWidget(appWidgetId, views)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
+                // 更新预算进度
+                val progress = if (budget > 0) {
+                    ((expense / budget) * 100).toInt().coerceIn(0, 100)
+                } else 0
+                views.setProgressBar(R.id.progress_budget, 100, progress, false)
+                views.setTextViewText(R.id.tv_budget_info, "¥${String.format("%.0f", expense)} / ¥${String.format("%.0f", budget)}")
+            } catch (e: Exception) {
+                views.setTextViewText(R.id.tv_income, "¥0")
+                views.setTextViewText(R.id.tv_expense, "¥0")
+                views.setTextViewText(R.id.tv_balance, "¥0")
+                views.setProgressBar(R.id.progress_budget, 100, 0, false)
+                views.setTextViewText(R.id.tv_budget_info, "¥0 / ¥5000")
             }
 
             // 记支出按钮 - 发送广播

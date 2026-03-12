@@ -180,6 +180,17 @@ object DatabaseModule {
     }
 
     @Provides
+    fun provideAIPermissionLogDao(database: AppDatabase): com.example.aiaccounting.data.local.dao.AIPermissionLogDao {
+        return database.aiPermissionLogDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideTagDao(database: AppDatabase): com.example.aiaccounting.data.local.dao.TagDao {
+        return database.tagDao()
+    }
+
+    @Provides
     @Singleton
     fun provideChatSessionRepository(
         sessionDao: ChatSessionDao,

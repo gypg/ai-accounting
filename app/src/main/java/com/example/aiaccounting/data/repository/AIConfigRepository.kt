@@ -28,7 +28,8 @@ class AIConfigRepository @Inject constructor(
      */
     fun getAIConfig(): Flow<AIConfig> {
         return dataStore.data.map { preferences ->
-            AIConfig(
+            val useBuiltin = preferences[booleanPreferencesKey(AIConfig.KEY_USE_BUILTIN)] ?: false
+            val userConfig = AIConfig(
                 provider = AIProvider.fromString(
                     preferences[stringPreferencesKey(AIConfig.KEY_PROVIDER)] ?: AIProvider.QWEN.name
                 ),
@@ -37,6 +38,30 @@ class AIConfigRepository @Inject constructor(
                 model = preferences[stringPreferencesKey(AIConfig.KEY_MODEL)] ?: "",
                 isEnabled = preferences[booleanPreferencesKey(AIConfig.KEY_ENABLED)] ?: false
             )
+            // 如果使用内置配置且内置配置已设置，则返回内置配置
+            AIConfig.getEffectiveConfig(userConfig, useBuiltin)
+        }
+    }
+
+    /**
+     * 获取是否使用内置配置
+     */
+    fun getUseBuiltin(): Flow<Boolean> {
+        return dataStore.data.map { preferences ->
+            preferences[booleanPreferencesKey(AIConfig.KEY_USE_BUILTIN)] ?: false
+        }
+    }
+
+    /**
+     * 设置是否使用内置配置
+     */
+    suspend fun setUseBuiltin(useBuiltin: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[booleanPreferencesKey(AIConfig.KEY_USE_BUILTIN)] = useBuiltin
+            // 如果使用内置配置，自动启用AI
+            if (useBuiltin) {
+                preferences[booleanPreferencesKey(AIConfig.KEY_ENABLED)] = true
+            }
         }
     }
 

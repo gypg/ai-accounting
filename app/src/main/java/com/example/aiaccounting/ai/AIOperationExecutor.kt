@@ -1,5 +1,6 @@
 package com.example.aiaccounting.ai
 
+import android.util.Log
 import com.example.aiaccounting.data.local.entity.*
 import com.example.aiaccounting.data.repository.*
 import kotlinx.coroutines.Dispatchers
@@ -56,6 +57,7 @@ class AIOperationExecutor @Inject constructor(
     
     /**
      * 添加交易记录并更新账户余额
+     * 修复：先插入交易记录，成功后再更新余额，确保数据一致性
      */
     private suspend fun addTransaction(op: AIOperation.AddTransaction): AIOperationResult {
         // 验证账户ID
@@ -78,16 +80,7 @@ class AIOperationExecutor @Inject constructor(
         val category = categoryRepository.getCategoryById(categoryId)
             ?: return AIOperationResult.Error("分类不存在")
         
-        // 先更新账户余额
-        val newBalance = when (op.type) {
-            TransactionType.INCOME -> account.balance + op.amount
-            TransactionType.EXPENSE -> account.balance - op.amount
-            TransactionType.TRANSFER -> account.balance // 转账需要特殊处理
-        }
-        val updatedAccount = account.copy(balance = newBalance)
-        accountRepository.updateAccount(updatedAccount)
-        
-        // 插入交易记录
+        // 先插入交易记录（关键修复：先插入交易，确保交易记录存在）
         val transaction = Transaction(
             amount = op.amount,
             type = op.type,
@@ -96,9 +89,35 @@ class AIOperationExecutor @Inject constructor(
             date = op.date,
             note = op.note ?: ""
         )
-        transactionRepository.insertTransaction(transaction)
         
-        return AIOperationResult.Success("已添加${if (op.type == TransactionType.INCOME) "收入" else "支出"}记录: ${op.amount}元")
+        return try {
+            Log.d("AIOperationExecutor", "开始插入交易记录: amount=${op.amount}, type=${op.type}, accountId=$accountId, categoryId=$categoryId")
+            val transactionId = transactionRepository.insertTransaction(transaction)
+            Log.d("AIOperationExecutor", "交易记录插入结果: transactionId=$transactionId")
+            
+            if (transactionId > 0) {
+                // 交易记录插入成功后，再更新账户余额
+                val newBalance = when (op.type) {
+                    TransactionType.INCOME -> account.balance + op.amount
+                    TransactionType.EXPENSE -> account.balance - op.amount
+                    TransactionType.TRANSFER -> account.balance // 转账需要特殊处理
+                }
+                Log.d("AIOperationExecutor", "更新账户余额: oldBalance=${account.balance}, newBalance=$newBalance")
+                val updatedAccount = account.copy(balance = newBalance)
+                accountRepository.updateAccount(updatedAccount)
+                Log.d("AIOperationExecutor", "账户余额更新成功")
+                
+                AIOperationResult.Success("已添加${if (op.type == TransactionType.INCOME) "收入" else "支出"}记录: ${op.amount}元")
+            } else {
+                // 交易插入失败，返回错误
+                Log.e("AIOperationExecutor", "交易记录插入失败: transactionId=$transactionId")
+                AIOperationResult.Error("保存交易记录失败")
+            }
+        } catch (e: Exception) {
+            // 捕获异常，确保错误被正确处理
+            Log.e("AIOperationExecutor", "保存交易记录异常: ${e.message}", e)
+            AIOperationResult.Error("保存交易记录失败: ${e.message}")
+        }
     }
     
     /**

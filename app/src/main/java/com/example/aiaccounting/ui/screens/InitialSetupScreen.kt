@@ -17,11 +17,12 @@ import com.example.aiaccounting.ui.viewmodel.CategoryViewModel
 @Composable
 fun InitialSetupScreen(
     onSetupComplete: () -> Unit,
+    onNavigateToSetupPin: () -> Unit,
     accountViewModel: AccountViewModel = hiltViewModel(),
     categoryViewModel: CategoryViewModel = hiltViewModel()
 ) {
     var currentStep by remember { mutableStateOf(0) }
-    val steps = listOf("欢迎", "设置账户", "设置分类", "完成")
+    val steps = listOf("欢迎", "设置账户", "设置分类", "安全设置", "完成")
 
     Scaffold(
         topBar = {
@@ -62,7 +63,15 @@ fun InitialSetupScreen(
                 0 -> WelcomeStep()
                 1 -> AccountSetupStep()
                 2 -> CategorySetupStep()
-                3 -> CompleteStep(onSetupComplete)
+                3 -> SecuritySetupStep(
+                    onSetupPin = {
+                        onNavigateToSetupPin()
+                    },
+                    onSkipPin = {
+                        currentStep++
+                    }
+                )
+                4 -> CompleteStep(onSetupComplete)
             }
 
             Spacer(modifier = Modifier.weight(1f))
@@ -238,6 +247,74 @@ fun CategorySetupStep() {
                 Text("工资\n奖金\n投资\n兼职\n红包\n退款\n其他")
             }
         }
+    }
+}
+
+@Composable
+fun SecuritySetupStep(
+    onSetupPin: () -> Unit,
+    onSkipPin: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            imageVector = Icons.Default.Security,
+            contentDescription = null,
+            modifier = Modifier.size(64.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "安全设置",
+            style = MaterialTheme.typography.headlineSmall
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "您可以选择设置PIN码来保护您的记账数据，也可以跳过此步骤稍后在设置中配置。",
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // 设置PIN码按钮
+        Button(
+            onClick = onSetupPin,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(
+                imageVector = Icons.Default.Lock,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("设置PIN码")
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // 跳过按钮
+        OutlinedButton(
+            onClick = onSkipPin,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("跳过，稍后再说")
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "提示：不设置PIN码，应用将不会要求验证即可访问。",
+            style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.outline
+        )
     }
 }
 

@@ -73,6 +73,26 @@
 # Keep MPAndroidChart
 -keep class com.github.mikephil.charting.** { *; }
 
+# Keep ML Kit
+-keep class com.google.mlkit.** { *; }
+-dontwarn com.google.mlkit.**
+
+# Keep Biometric
+-keep class androidx.biometric.** { *; }
+
+# Keep WorkManager
+-keep class * extends androidx.work.Worker
+-keep class * extends androidx.work.ListenableWorker {
+    public <init>(android.content.Context, androidx.work.WorkerParameters);
+}
+
+# Keep data models (API response/request)
+-keep class com.example.aiaccounting.data.model.** { *; }
+-keep class com.example.aiaccounting.data.service.RemoteModel { *; }
+
+# Keep Widget providers and receivers
+-keep class com.example.aiaccounting.widget.** { *; }
+
 # Keep Hilt
 -keep class * extends dagger.hilt.android.HiltAndroidApp
 -keep class * extends android.app.Application

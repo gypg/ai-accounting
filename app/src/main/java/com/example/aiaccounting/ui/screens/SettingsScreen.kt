@@ -36,6 +36,7 @@ fun SettingsScreen(
     onNavigateToImport: () -> Unit = {},
     onNavigateToAISettings: () -> Unit = {},
     onNavigateToBudgets: () -> Unit = {},
+    onNavigateToSetupPin: () -> Unit = {},
     onLogout: () -> Unit = {},
     onThemeChanged: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
@@ -174,6 +175,19 @@ fun SettingsScreen(
 
             val uiState by viewModel.uiState.collectAsState()
             var showBiometricDialog by remember { mutableStateOf(false) }
+            var showPinOptionsDialog by remember { mutableStateOf(false) }
+
+            // PIN码设置
+            SettingsListItem(
+                icon = Icons.Default.Lock,
+                title = "PIN码保护",
+                subtitle = if (uiState.isPinSet) "已设置" else "未设置",
+                onClick = {
+                    showPinOptionsDialog = true
+                }
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
 
             // 生物识别开关
             SettingsListItem(
@@ -184,6 +198,58 @@ fun SettingsScreen(
                     showBiometricDialog = true
                 }
             )
+
+            // PIN码选项对话框
+            if (showPinOptionsDialog) {
+                AlertDialog(
+                    onDismissRequest = { showPinOptionsDialog = false },
+                    title = { Text("PIN码保护") },
+                    text = {
+                        Column {
+                            if (uiState.isPinSet) {
+                                Text("您已设置PIN码保护")
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Button(
+                                    onClick = {
+                                        showPinOptionsDialog = false
+                                        onNavigateToSetupPin()
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("修改PIN码")
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                OutlinedButton(
+                                    onClick = {
+                                        viewModel.clearPin()
+                                        showPinOptionsDialog = false
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("清除PIN码")
+                                }
+                            } else {
+                                Text("设置PIN码可以保护您的记账数据安全")
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Button(
+                                    onClick = {
+                                        showPinOptionsDialog = false
+                                        onNavigateToSetupPin()
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("设置PIN码")
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showPinOptionsDialog = false }) {
+                            Text("关闭")
+                        }
+                    }
+                )
+            }
 
             // 生物识别设置对话框
             if (showBiometricDialog) {
@@ -228,6 +294,7 @@ fun SettingsScreen(
                 "dark" -> "深色"
                 "amoled" -> "AMOLED纯黑"
                 "dynamic" -> "Material You动态"
+                "horse_2026" -> "2026马年主题"
                 else -> "跟随系统"
             }
 
@@ -254,6 +321,19 @@ fun SettingsScreen(
                     }
                 )
             }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // 管家设置区域
+            SettingsSectionTitle("管家")
+            
+            // 管家选择入口
+            SettingsListItem(
+                icon = Icons.Default.SmartToy,
+                title = "AI管家",
+                subtitle = "选择您喜欢的管家角色",
+                onClick = onNavigateToAIModelSettings
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -402,7 +482,7 @@ fun SettingsScreen(
             Triple("light", "浅色", "明亮的浅色主题"),
             Triple("dark", "深色", "深色主题，护眼模式"),
             Triple("amoled", "AMOLED纯黑", "纯黑背景，OLED省电"),
-            Triple("horse2026", "🐴 马年主题", "2026马年新春特别主题，红色喜庆风格")
+            Triple("horse_2026", "2026马年主题", "新春马年主题")
         )
 
         AlertDialog(

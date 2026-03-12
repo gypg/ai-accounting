@@ -34,11 +34,6 @@ object HorseTheme2026Colors {
     val TextSecondary = Color(0xFFFFE4B5)        // 米黄
     val TextTertiary = Color(0x80FFFFFF)         // 半透明白
 
-    // 别名（用于简化引用）
-    val GoldenText = Color(0xFFFFD700)           // 金色文字
-    val Primary = Color(0xFFD32F2F)              // 主色（深红）
-    val Secondary = Color(0xFFE57373)            // 次要色（浅红）
-
     // 功能色 - 优化对比度
     val Income = Color(0xFF4CAF50)               // 收入绿
     val Expense = Color(0xFFFFEB3B)              // 支出亮黄色（高对比度）

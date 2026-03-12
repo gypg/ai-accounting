@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import net.sqlcipher.database.SupportFactory
 import com.example.aiaccounting.data.local.converter.Converters
@@ -16,6 +17,7 @@ import com.example.aiaccounting.data.local.dao.TransactionTemplateDao
 import com.example.aiaccounting.data.local.dao.ChatSessionDao
 import com.example.aiaccounting.data.local.dao.ChatMessageDao
 import com.example.aiaccounting.data.local.dao.ChatMemoryDao
+import com.example.aiaccounting.data.local.dao.TagDao
 import com.example.aiaccounting.data.local.entity.Account
 import com.example.aiaccounting.data.local.entity.Category
 import com.example.aiaccounting.data.local.entity.Transaction
@@ -25,6 +27,8 @@ import com.example.aiaccounting.data.local.entity.TransactionTemplate
 import com.example.aiaccounting.data.local.entity.ChatSession
 import com.example.aiaccounting.data.local.entity.ChatMessageEntity
 import com.example.aiaccounting.data.local.entity.ChatMemory
+import com.example.aiaccounting.data.local.entity.Tag
+import com.example.aiaccounting.data.local.entity.TransactionTag
 import com.example.aiaccounting.security.SecurityManager
 import com.example.aiaccounting.data.storage.StorageManager
 import com.example.aiaccounting.data.storage.ExternalSharedPreferences
@@ -45,10 +49,13 @@ import javax.inject.Singleton
         TransactionTemplate::class,
         ChatSession::class,
         ChatMessageEntity::class,
-        ChatMemory::class
+        ChatMemory::class,
+        com.example.aiaccounting.data.local.entity.AIPermissionLog::class,
+        Tag::class,
+        TransactionTag::class
     ],
-    version = 3,
-    exportSchema = false
+    version = 5,
+    exportSchema = true
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -62,9 +69,35 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun chatSessionDao(): ChatSessionDao
     abstract fun chatMessageDao(): ChatMessageDao
     abstract fun chatMemoryDao(): ChatMemoryDao
+    abstract fun aiPermissionLogDao(): com.example.aiaccounting.data.local.dao.AIPermissionLogDao
+    abstract fun tagDao(): TagDao
 
     companion object {
         const val DATABASE_NAME = "ai_accounting.db"
+
+        /**
+         * Migration from version 4 to 5: Add tags and transaction_tags tables
+         */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `tags` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `color` TEXT NOT NULL DEFAULT '#2196F3',
+                        `icon` TEXT,
+                        `createdAt` INTEGER NOT NULL
+                    )
+                """)
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `transaction_tags` (
+                        `transactionId` INTEGER NOT NULL,
+                        `tagId` INTEGER NOT NULL,
+                        PRIMARY KEY(`transactionId`, `tagId`)
+                    )
+                """)
+            }
+        }
     }
 }
 
@@ -104,7 +137,8 @@ class DatabaseFactory @Inject constructor(
             AppDatabase.DATABASE_NAME
         )
             .openHelperFactory(factory)
-            .fallbackToDestructiveMigration() // For development only - will recreate database
+            .fallbackToDestructiveMigrationFrom(1, 2, 3)
+            .addMigrations(AppDatabase.MIGRATION_4_5)
             .addCallback(DatabaseCallback())
             .build()
 

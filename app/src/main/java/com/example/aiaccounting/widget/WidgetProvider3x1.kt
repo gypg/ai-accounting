@@ -8,8 +8,6 @@ import android.content.Context
 import android.content.Intent
 import android.widget.RemoteViews
 import com.example.aiaccounting.R
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -43,19 +41,16 @@ class WidgetProvider3x1 : AppWidgetProvider() {
             views.setTextViewText(R.id.tv_date, now.format(dateFormatter))
 
             // 加载财务数据
-            GlobalScope.launch {
-                try {
-                    val prefs = context.getSharedPreferences("widget_stats", Context.MODE_PRIVATE)
-                    val income = prefs.getFloat("month_income", 0f)
-                    val expense = prefs.getFloat("month_expense", 0f)
+            try {
+                val prefs = context.getSharedPreferences("widget_stats", Context.MODE_PRIVATE)
+                val income = prefs.getFloat("month_income", 0f)
+                val expense = prefs.getFloat("month_expense", 0f)
 
-                    views.setTextViewText(R.id.tv_income, "¥${String.format("%.0f", income)}")
-                    views.setTextViewText(R.id.tv_expense, "¥${String.format("%.0f", expense)}")
-
-                    appWidgetManager.updateAppWidget(appWidgetId, views)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
+                views.setTextViewText(R.id.tv_income, "¥${String.format("%.0f", income)}")
+                views.setTextViewText(R.id.tv_expense, "¥${String.format("%.0f", expense)}")
+            } catch (e: Exception) {
+                views.setTextViewText(R.id.tv_income, "¥0")
+                views.setTextViewText(R.id.tv_expense, "¥0")
             }
 
             // 点击发送广播

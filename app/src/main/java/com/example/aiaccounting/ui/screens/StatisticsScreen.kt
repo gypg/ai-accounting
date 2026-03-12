@@ -192,7 +192,10 @@ fun StatisticsScreen(
                             data = statistics.monthlyTrend,
                             modifier = Modifier.fillMaxWidth(),
                             showIncome = true,
-                            showExpense = true
+                            showExpense = true,
+                            onDataPointClick = { selectedData ->
+                                // 点击数据点显示详情
+                            }
                         )
                     }
                 }

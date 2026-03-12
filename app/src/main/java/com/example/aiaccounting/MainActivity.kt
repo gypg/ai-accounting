@@ -47,13 +47,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             // 使用remember来监听主题变化
             var themeKey by remember { mutableStateOf(0) }
-
+            
             // 读取当前主题设置
             val themeSetting = remember(themeKey) { appStateManager.getTheme() }
-
-            // 判断是否为马年主题
-            val isHorseTheme = themeSetting == "horse2026"
-
+            
             AIAccountingTheme(
                 themeSetting = themeSetting
             ) {
@@ -61,7 +58,6 @@ class MainActivity : ComponentActivity() {
                     securityManager = securityManager,
                     appStateManager = appStateManager,
                     themeKey = themeKey,
-                    isHorseTheme = isHorseTheme,
                     onThemeChanged = { themeKey++ },
                     onRequestStoragePermission = { requestStoragePermission() },
                     widgetAction = widgetAction
@@ -97,7 +93,6 @@ fun MainApp(
     securityManager: SecurityManager,
     appStateManager: AppStateManager,
     themeKey: Int,
-    isHorseTheme: Boolean,
     onThemeChanged: () -> Unit,
     onRequestStoragePermission: () -> Unit,
     widgetAction: String? = null
@@ -108,9 +103,33 @@ fun MainApp(
     // 内存中的登录状态 - 每次启动都是false，需要重新登录
     var isLoggedIn by remember { mutableStateOf(false) }
     
-    // 每次refreshKey变化时重新读取持久化状态
-    val isPinSet = remember(refreshKey) { securityManager.isPinSet() }
-    val hasInitialSetup = remember(refreshKey) { appStateManager.isInitialSetupCompleted() }
+    // 使用StateFlow异步加载状态，避免阻塞UI
+    val isPinSet by remember(refreshKey) { 
+        mutableStateOf(securityManager.isPinSet())
+    }
+    val hasInitialSetup by remember(refreshKey) { 
+        mutableStateOf(appStateManager.isInitialSetupCompleted())
+    }
+    
+    // 添加加载状态
+    var isLoading by remember { mutableStateOf(true) }
+    
+    // 模拟异步加载完成
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(100)
+        isLoading = false
+    }
+    
+    // 如果还在加载中，显示加载界面
+    if (isLoading) {
+        Box(
+            modifier = androidx.compose.ui.Modifier.fillMaxSize(),
+            contentAlignment = androidx.compose.ui.Alignment.Center
+        ) {
+            CircularProgressIndicator()
+        }
+        return
+    }
 
     // 如果有小组件action且已设置PIN，自动标记为已登录（简化流程）
     val autoLoginFromWidget = widgetAction != null && isPinSet && hasInitialSetup
@@ -119,10 +138,10 @@ fun MainApp(
     val effectiveIsLoggedIn = isLoggedIn || autoLoginFromWidget
 
     // Determine start destination
+    // PIN码现在可选，用户可以选择设置或跳过
     val startDestination = when {
         !hasInitialSetup -> Screen.InitialSetup.route
-        !isPinSet -> Screen.SetupPin.route
-        !effectiveIsLoggedIn -> Screen.Login.route
+        !effectiveIsLoggedIn && isPinSet -> Screen.Login.route
         else -> "overview"
     }
 
@@ -162,7 +181,6 @@ fun MainApp(
         navController = navController,
         startDestination = startDestination,
         appStateManager = appStateManager,
-        isHorseTheme = isHorseTheme,
         onSetupComplete = { pin ->
             globalPin = pin
             isLoggedIn = true

@@ -92,6 +92,15 @@ fun AISettingsScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                 }
 
+                // 内置默认模型开关（如果内置配置可用）
+                if (uiState.isBuiltinAvailable) {
+                    BuiltinConfigCard(
+                        isEnabled = uiState.useBuiltinConfig,
+                        onEnabledChange = { viewModel.toggleBuiltinConfig(it) }
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
                 // 启用AI助手开关
                 EnableAICard(
                     isEnabled = uiState.config.isEnabled,
@@ -100,104 +109,111 @@ fun AISettingsScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // AI提供商选择
-                ProviderCard(
-                    selectedProvider = uiState.config.provider,
-                    onProviderSelected = { viewModel.updateProvider(it) }
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // API配置
-                APIConfigCard(
-                    apiKey = uiState.config.apiKey,
-                    apiUrl = uiState.config.apiUrl,
-                    model = uiState.config.model,
-                    provider = uiState.config.provider,
-                    remoteModels = uiState.remoteModels,
-                    isFetchingModels = uiState.isFetchingModels,
-                    showApiKey = showApiKey,
-                    onShowApiKeyChange = { showApiKey = it },
-                    onApiKeyChange = { viewModel.updateApiKey(it) },
-                    onApiUrlChange = { viewModel.updateApiUrl(it) },
-                    onModelChange = { viewModel.updateModel(it) },
-                    onFetchModels = { viewModel.fetchRemoteModels() }
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // 测试连接按钮
-                Button(
-                    onClick = { viewModel.testConnection() },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !uiState.isTesting && uiState.config.apiKey.isNotBlank() && uiState.isNetworkAvailable
-                ) {
-                    if (uiState.isTesting) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                    }
-                    Icon(Icons.Default.NetworkCheck, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("测试连接")
-                }
-
-                // 测试结果
-                uiState.testResult?.let { result ->
-                    Spacer(modifier = Modifier.height(8.dp))
-                    TestResultCard(
-                        result = result,
-                        onDismiss = { viewModel.clearTestResult() }
+                // AI提供商选择（仅在不使用内置配置时显示）
+                if (!uiState.useBuiltinConfig) {
+                    ProviderCard(
+                        selectedProvider = uiState.config.provider,
+                        onProviderSelected = { viewModel.updateProvider(it) }
                     )
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                // API配置（仅在不使用内置配置时显示）
+                if (!uiState.useBuiltinConfig) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    APIConfigCard(
+                        apiKey = uiState.config.apiKey,
+                        apiUrl = uiState.config.apiUrl,
+                        model = uiState.config.model,
+                        provider = uiState.config.provider,
+                        remoteModels = uiState.remoteModels,
+                        isFetchingModels = uiState.isFetchingModels,
+                        showApiKey = showApiKey,
+                        onShowApiKeyChange = { showApiKey = it },
+                        onApiKeyChange = { viewModel.updateApiKey(it) },
+                        onApiUrlChange = { viewModel.updateApiUrl(it) },
+                        onModelChange = { viewModel.updateModel(it) },
+                        onFetchModels = { viewModel.fetchRemoteModels() }
+                    )
 
-                // 保存按钮
-                Button(
-                    onClick = { viewModel.saveConfig() },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !uiState.isSaving
-                ) {
-                    if (uiState.isSaving) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                    }
-                    Icon(Icons.Default.Save, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("保存设置")
-                }
+                    Spacer(modifier = Modifier.height(24.dp))
 
-                // 保存成功提示
-                if (uiState.saveSuccess) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Card(
+                    // 测试连接按钮
+                    Button(
+                        onClick = { viewModel.testConnection() },
                         modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
-                        )
+                        enabled = !uiState.isTesting && uiState.config.apiKey.isNotBlank() && uiState.isNetworkAvailable
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        if (uiState.isTesting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        Icon(Icons.Default.NetworkCheck, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("测试连接")
+                    }
+
+                    // 测试结果
+                    uiState.testResult?.let { result ->
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TestResultCard(
+                            result = result,
+                            onDismiss = { viewModel.clearTestResult() }
+                        )
+                    }
+                }
+
+                // 保存按钮（仅在不使用内置配置时显示）
+                if (!uiState.useBuiltinConfig) {
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Button(
+                        onClick = { viewModel.saveConfig() },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !uiState.isSaving
+                    ) {
+                        if (uiState.isSaving) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        Icon(Icons.Default.Save, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("保存设置")
+                    }
+
+                    // 保存成功提示
+                    if (uiState.saveSuccess) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer
+                            )
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = "设置已保存",
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = "设置已保存",
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
                         }
                     }
                 }
@@ -277,6 +293,59 @@ private fun NetworkStatusCard() {
                     color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f)
                 )
             }
+        }
+    }
+}
+
+/**
+ * 内置默认模型配置卡片
+ */
+@Composable
+private fun BuiltinConfigCard(
+    isEnabled: Boolean,
+    onEnabledChange: (Boolean) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Star,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = "使用默认模型",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "使用内置配置，无需手动设置",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Switch(
+                checked = isEnabled,
+                onCheckedChange = onEnabledChange
+            )
         }
     }
 }

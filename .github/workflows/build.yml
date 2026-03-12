@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  lint:
+    name: Lint Check
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v4
 
@@ -22,85 +22,116 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v3
-      with:
-        gradle-version: 8.5
-        cache-disabled: true
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
 
-    - name: Clean build
-      run: gradle clean
+    - name: Run Android Lint
+      run: ./gradlew lintDebug --continue
+
+    - name: Upload Lint Report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: lint-report
+        path: app/build/reports/lint-results-debug.html
+        retention-days: 14
+
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Run Unit Tests
+      run: ./gradlew testDebugUnitTest --continue
+
+    - name: Upload Test Report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-report
+        path: app/build/reports/tests/testDebugUnitTest/
+        retention-days: 14
+
+  build:
+    name: Build APK
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
 
     - name: Build Debug APK
-      run: gradle assembleDebug --rerun-tasks
+      run: ./gradlew assembleDebug
 
     - name: Build Release APK
-      run: gradle assembleRelease --rerun-tasks
+      run: ./gradlew assembleRelease
+
+    - name: Rename APKs
+      run: |
+        VERSION=$(grep 'versionName' app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/')
+        DATE=$(date +%Y%m%d)
+        mkdir -p artifacts
+        cp app/build/outputs/apk/debug/app-debug.apk "artifacts/AI记账_v${VERSION}_debug_${DATE}.apk"
+        cp app/build/outputs/apk/release/app-release-unsigned.apk "artifacts/AI记账_v${VERSION}_release_${DATE}.apk" 2>/dev/null || true
 
     - name: Upload Debug APK
       uses: actions/upload-artifact@v4
       with:
         name: debug-apk
-        path: app/build/outputs/apk/debug/app-debug.apk
+        path: artifacts/*debug*.apk
         retention-days: 30
 
     - name: Upload Release APK
       uses: actions/upload-artifact@v4
       with:
         name: release-apk
-        path: app/build/outputs/apk/release/app-release-unsigned.apk
+        path: artifacts/*release*.apk
         retention-days: 30
 
   release:
     needs: build
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
-
     steps:
     - uses: actions/checkout@v4
 
-    - name: Download Debug APK
+    - name: Download APKs
       uses: actions/download-artifact@v4
       with:
-        name: debug-apk
         path: ./apk
-
-    - name: Download Release APK
-      uses: actions/download-artifact@v4
-      with:
-        name: release-apk
-        path: ./apk
-
-    - name: Rename APKs
-      run: |
-        mv ./apk/app-debug.apk ./apk/AI-Accounting-debug.apk
-        mv ./apk/app-release-unsigned.apk ./apk/AI-Accounting-release.apk
+        merge-multiple: true
 
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
-        files: |
-          ./apk/AI-Accounting-debug.apk
-          ./apk/AI-Accounting-release.apk
+        files: ./apk/*.apk
         body: |
-          ## AI记账 Android App
-          
+          ## AI记账 ${{ github.ref_name }}
+
           ### 下载说明
-          - **AI-Accounting-debug.apk**: Debug版本（推荐测试使用）
-          - **AI-Accounting-release.apk**: Release版本（未签名，可自行签名后安装）
-          
-          ### 功能特点
-          - AI智能记账：自然语言输入，自动识别金额、分类
-          - 图片识别记账：拍照识别收据自动记账
-          - 多账户管理：支持现金、银行卡、支付宝、微信等
-          - 桌面小组件：5种尺寸小组件，快速记账
-          - 数据安全：本地加密存储，支持指纹/面部识别
-          
-          ### 开源项目
-          本项目使用了众多优秀的开源项目，详见 [ACKNOWLEDGMENTS.md](https://github.com/${{ github.repository }}/blob/main/ACKNOWLEDGMENTS.md)
-          
-          ### 许可证
-          [MIT License](https://github.com/${{ github.repository }}/blob/main/LICENSE)
+          - **debug.apk**: Debug 版本（推荐测试使用）
+          - **release.apk**: Release 版本（未签名）
+
+          ### 变更内容
+          详见 commit 记录。
         draft: false
         prerelease: false
       env:

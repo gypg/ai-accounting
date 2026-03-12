@@ -40,6 +40,7 @@ fun HorseTransactionScreen(
     val viewOptions = listOf("列表", "图表")
 
     val transactions by viewModel.transactions.collectAsState()
+    val categories by viewModel.categories.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
 
     val calendar = Calendar.getInstance()
@@ -105,7 +106,10 @@ fun HorseTransactionScreen(
                     // 根据选中视图显示不同内容 - 使用真实数据
                     when (selectedView) {
                         0 -> TransactionListView(transactions = transactions)
-                        1 -> TransactionChartView(transactions = transactions)
+                        1 -> TransactionChartView(
+                            transactions = transactions,
+                            categories = categories
+                        )
                     }
                 }
 
@@ -212,9 +216,12 @@ fun TransactionListView(transactions: List<Transaction>) {
 }
 
 @Composable
-fun TransactionChartView(transactions: List<Transaction>) {
-    // 计算分类统计数据
-    val categoryStats = rememberTransactionCategoryStats(transactions)
+fun TransactionChartView(
+    transactions: List<Transaction>,
+    categories: List<com.example.aiaccounting.data.local.entity.Category>
+) {
+    // 计算分类统计数据，使用真实的分类名称
+    val categoryStats = rememberTransactionCategoryStats(transactions, categories)
     val totalExpense = categoryStats.sumOf { it.amount }
 
     Column(
@@ -716,28 +723,25 @@ data class TransactionCategoryStat(
 
 @Composable
 private fun rememberTransactionCategoryStats(
-    transactions: List<Transaction>
+    transactions: List<Transaction>,
+    categories: List<com.example.aiaccounting.data.local.entity.Category>
 ): List<TransactionCategoryStat> {
-    return remember(transactions) {
+    return remember(transactions, categories) {
         val expenseTransactions = transactions.filter { it.type == TransactionType.EXPENSE }
         val totalExpense = expenseTransactions.sumOf { it.amount }
+
+        // 创建分类ID到名称的映射
+        val categoryMap = categories.associateBy { it.id }
 
         expenseTransactions
             .groupBy { it.categoryId }
             .map { (categoryId, transList) ->
                 val amount = transList.sumOf { it.amount }
-                val categoryName = when (categoryId) {
-                    1L -> "餐饮"
-                    2L -> "购物"
-                    3L -> "交通"
-                    4L -> "娱乐"
-                    5L -> "居住"
-                    6L -> "医疗"
-                    7L -> "教育"
-                    8L -> "其他"
-                    else -> "未分类"
-                }
-                val color = when (categoryId % 5) {
+                // 从分类映射中获取真实名称，如果没有则显示"未分类"
+                val category = categoryMap[categoryId]
+                val categoryName = category?.name ?: "未分类"
+                // 使用分类的颜色，如果没有则使用默认颜色
+                val color = category?.color?.let { parseColor(it) } ?: when (categoryId % 5) {
                     0L -> HorseTheme2026Colors.Expense
                     1L -> HorseTheme2026Colors.Gold
                     2L -> HorseTheme2026Colors.Income
@@ -751,6 +755,18 @@ private fun rememberTransactionCategoryStats(
                 )
             }
             .sortedByDescending { it.amount }
+    }
+}
+
+/**
+ * 将十六进制颜色字符串转换为Compose Color
+ */
+private fun parseColor(colorString: String): Color {
+    return try {
+        val color = android.graphics.Color.parseColor(colorString)
+        Color(color)
+    } catch (e: Exception) {
+        HorseTheme2026Colors.Gold
     }
 }
 

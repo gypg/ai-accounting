@@ -5,12 +5,16 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 android {
     namespace = "com.example.aiaccounting"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.example.aiaccounting"
+        applicationId = "com.moneytalk.ai"
         minSdk = 26
         targetSdk = 34
         versionCode = 18
@@ -39,8 +43,12 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // 使用debug签名进行测试构建
-            signingConfig = signingConfigs.getByName("debug")
+            // 环境变量存在时使用 release 签名，否则回退到 debug 签名
+            signingConfig = if (System.getenv("KEYSTORE_PASSWORD").isNullOrEmpty()) {
+                signingConfigs.getByName("debug")
+            } else {
+                signingConfigs.getByName("release")
+            }
         }
         debug {
             isMinifyEnabled = false

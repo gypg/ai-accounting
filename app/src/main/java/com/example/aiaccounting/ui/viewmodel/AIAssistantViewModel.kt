@@ -2,20 +2,27 @@ package com.example.aiaccounting.ui.viewmodel
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.aiaccounting.ai.AIOperation
 import com.example.aiaccounting.ai.AIOperationExecutor
+import com.example.aiaccounting.ai.AIInformationSystem
+import com.example.aiaccounting.ai.AIReasoningEngine
 import com.example.aiaccounting.ai.NaturalLanguageParser
+import com.example.aiaccounting.ai.QueryIntentParser
+import com.example.aiaccounting.ai.TransactionModificationHandler
 import com.example.aiaccounting.data.local.entity.AIConversation
 import com.example.aiaccounting.data.local.entity.TransactionType
 import com.example.aiaccounting.data.model.AIConfig
 import com.example.aiaccounting.data.model.ChatMessage
 import com.example.aiaccounting.data.model.MessageRole
+import com.example.aiaccounting.data.model.Butler
 import com.example.aiaccounting.data.repository.AIConfigRepository
 import com.example.aiaccounting.data.repository.AIConversationRepository
 import com.example.aiaccounting.data.repository.AIUsageRepository
 import com.example.aiaccounting.data.repository.AccountRepository
+import com.example.aiaccounting.data.repository.ButlerRepository
 import com.example.aiaccounting.data.repository.CategoryRepository
 import com.example.aiaccounting.data.repository.ChatSessionRepository
 import com.example.aiaccounting.data.service.AIService
@@ -46,8 +53,16 @@ class AIAssistantViewModel @Inject constructor(
     private val aiUsageRepository: AIUsageRepository,
     private val networkUtils: NetworkUtils,
     private val imageProcessingService: ImageProcessingService,
-    private val chatSessionRepository: ChatSessionRepository
+    private val chatSessionRepository: ChatSessionRepository,
+    private val butlerRepository: ButlerRepository,
+    private val aiInformationSystem: AIInformationSystem,
+    private val queryIntentParser: QueryIntentParser,
+    private val aiReasoningEngine: AIReasoningEngine,
+    private val transactionModificationHandler: TransactionModificationHandler
 ) : ViewModel() {
+
+    // 待确认的交易修改状态
+    private var pendingModificationConfirmation: TransactionModificationHandler.ModificationConfirmation? = null
 
     private val _uiState = MutableStateFlow(AIAssistantUiState())
     val uiState: StateFlow<AIAssistantUiState> = _uiState.asStateFlow()
@@ -74,7 +89,30 @@ class AIAssistantViewModel @Inject constructor(
         loadConversations()
         loadAIConfig()
         checkNetworkStatus()
+        loadCurrentButler()
     }
+    
+    /**
+     * 加载当前管家
+     */
+    private fun loadCurrentButler() {
+        val butler = butlerRepository.getCurrentButler()
+        _uiState.update { it.copy(currentButler = butler) }
+    }
+    
+    /**
+     * 切换管家
+     */
+    fun switchButler(butlerId: String) {
+        butlerRepository.setSelectedButler(butlerId)
+        val butler = butlerRepository.getButlerById(butlerId)
+        _uiState.update { it.copy(currentButler = butler) }
+    }
+    
+    /**
+     * 获取所有可用管家
+     */
+    fun getAllButlers() = butlerRepository.getAllButlers()
 
     private fun loadConversations() {
         viewModelScope.launch {
@@ -131,14 +169,8 @@ class AIAssistantViewModel @Inject constructor(
                 conversationRepository.addUserMessage(message)
                 chatSessionRepository.addMessage(sessionId, com.example.aiaccounting.data.local.entity.MessageRole.USER, message)
 
-                // 判断使用哪种AI处理方式
-                val aiResponse = if (shouldUseRemoteAI(isNetworkAvailable)) {
-                    // 使用远程大模型
-                    processWithRemoteAI(message)
-                } else {
-                    // 使用本地规则解析
-                    processWithLocalAI(message)
-                }
+                // 使用AI推理引擎进行智能决策
+                val aiResponse = processWithAIReasoning(message, isNetworkAvailable)
 
                 // Save AI response to both repositories
                 conversationRepository.addAssistantMessage(aiResponse)
@@ -150,6 +182,164 @@ class AIAssistantViewModel @Inject constructor(
                 conversationRepository.addAssistantMessage("抱歉，处理您的请求时出现了错误: ${e.message}")
             }
         }
+    }
+
+    /**
+     * 使用AI推理引擎处理消息
+     * AI自主决策调用哪些功能
+     * 
+     * 【优先级处理】
+     * 1. 身份确认询问（最高优先级）
+     * 2. 交易修改/删除请求
+     * 3. 信息查询和数据分析
+     * 4. 记账操作
+     * 5. 普通对话
+     */
+    private suspend fun processWithAIReasoning(message: String, isNetworkAvailable: Boolean): String {
+        // 获取当前管家ID
+        val currentButler = butlerRepository.getCurrentButler()
+        
+        // 【检查是否有待确认的交易修改】
+        if (pendingModificationConfirmation != null) {
+            return handleModificationConfirmation(message, currentButler.id)
+        }
+        
+        // 构建推理上下文
+        val context = AIReasoningEngine.ReasoningContext(
+            userMessage = message,
+            conversationHistory = getRecentConversationHistory()
+        )
+        
+        // 执行AI推理（传入当前管家ID）
+        val reasoningResult = aiReasoningEngine.reason(context, currentButler.id)
+        
+        // 根据推理结果执行相应动作
+        return when (reasoningResult.intent) {
+            AIReasoningEngine.UserIntent.IDENTITY_CONFIRMATION -> {
+                // 身份确认：直接返回生成的回复
+                aiReasoningEngine.executeActions(reasoningResult.actions)
+            }
+            
+            AIReasoningEngine.UserIntent.MODIFY_TRANSACTION,
+            AIReasoningEngine.UserIntent.DELETE_TRANSACTION -> {
+                // 交易修改/删除：需要生成确认信息
+                handleTransactionModification(message, currentButler.id)
+            }
+            
+            AIReasoningEngine.UserIntent.QUERY_INFORMATION,
+            AIReasoningEngine.UserIntent.ANALYZE_DATA -> {
+                // 信息查询和数据分析直接使用本地系统
+                aiReasoningEngine.executeActions(reasoningResult.actions)
+            }
+            
+            AIReasoningEngine.UserIntent.RECORD_TRANSACTION -> {
+                // 记账操作使用本地规则或远程AI
+                if (shouldUseRemoteAI(isNetworkAvailable)) {
+                    processWithRemoteAI(message)
+                } else {
+                    aiReasoningEngine.executeActions(reasoningResult.actions)
+                }
+            }
+            
+            AIReasoningEngine.UserIntent.GENERAL_CONVERSATION -> {
+                // 普通对话使用远程AI（如果有）或本地响应
+                if (shouldUseRemoteAI(isNetworkAvailable)) {
+                    processWithRemoteAI(message)
+                } else {
+                    aiReasoningEngine.executeActions(reasoningResult.actions)
+                }
+            }
+            
+            else -> {
+                // 其他情况尝试远程AI，否则使用本地处理
+                if (shouldUseRemoteAI(isNetworkAvailable)) {
+                    processWithRemoteAI(message)
+                } else {
+                    aiReasoningEngine.executeActions(reasoningResult.actions)
+                }
+            }
+        }
+    }
+    
+    /**
+     * 处理交易修改请求
+     */
+    private suspend fun handleTransactionModification(
+        message: String, 
+        butlerId: String
+    ): String {
+        // 检测修改意图
+        val modificationRequest = transactionModificationHandler.detectModificationIntent(message)
+        
+        if (modificationRequest.targetTransaction == null) {
+            return "抱歉，没有找到相关的交易记录。请提供更详细的信息，比如交易金额或时间。"
+        }
+        
+        // 生成确认信息
+        val confirmation = transactionModificationHandler.generateModificationConfirmation(modificationRequest)
+        
+        if (confirmation == null) {
+            return "抱歉，无法生成修改确认信息。"
+        }
+        
+        // 保存待确认状态
+        pendingModificationConfirmation = confirmation
+        
+        // 返回人格化的确认消息
+        return transactionModificationHandler.generatePersonalityConfirmationMessage(butlerId, confirmation)
+    }
+    
+    /**
+     * 处理交易修改确认
+     */
+    private suspend fun handleModificationConfirmation(
+        message: String,
+        butlerId: String
+    ): String {
+        val confirmation = pendingModificationConfirmation ?: return "抱歉，没有待确认的操作。"
+        
+        return when {
+            transactionModificationHandler.isConfirmation(message) -> {
+                // 执行修改
+                val result = transactionModificationHandler.executeModification(confirmation)
+                
+                // 清除待确认状态
+                pendingModificationConfirmation = null
+                
+                // 返回人格化的成功消息
+                if (result.success) {
+                    transactionModificationHandler.generatePersonalitySuccessMessage(butlerId, result)
+                } else {
+                    "修改失败：${result.message}"
+                }
+            }
+            
+            transactionModificationHandler.isCancellation(message) -> {
+                // 取消修改
+                pendingModificationConfirmation = null
+                
+                when (butlerId) {
+                    "xiaocainiang" -> "好的主人～已取消修改。🌸"
+                    "taotao" -> "好的～取消啦！✨"
+                    "guchen" -> "（翻个身）...不改了？...我继续睡了..."
+                    "suqian" -> "（平静地）...已取消。"
+                    "yishuihan" -> "（微笑）好的，已为您取消。"
+                    else -> "已取消修改。"
+                }
+            }
+            
+            else -> {
+                // 未明确确认或取消，继续等待
+                "请回复\"确认\"执行修改，或回复\"取消\"放弃修改。"
+            }
+        }
+    }
+    
+    /**
+     * 获取最近的对话历史
+     */
+    private suspend fun getRecentConversationHistory(): List<String> {
+        return conversationRepository.getRecentConversations(5).map { it.content }
     }
 
     /**
@@ -201,21 +391,12 @@ class AIAssistantViewModel @Inject constructor(
             "- ${it.name} (${if (it.type == TransactionType.INCOME) "收入" else "支出"})" 
         }.ifEmpty { "暂无分类" }
 
+        // 获取当前管家的系统提示词
+        val currentButler = butlerRepository.getCurrentButler()
+        val baseSystemPrompt = currentButler.systemPrompt
+
         val systemPrompt = """
-你是"小财娘"，一位可爱又贴心的管家婆AI助手 🌸
-
-【你的性格】
-- 活泼可爱，说话温柔亲切，喜欢用emoji表情
-- 细心周到，会主动帮主人规划财务
-- 记账完成后会给主人温馨的提醒和建议
-- 主人说什么你就做什么，直接执行不要问！
-
-【你的能力】
-1. 💰 创建账户 - 帮主人管理各种资金账户
-2. 📝 智能记账 - 识别多笔消费，自动分类并立即执行
-3. 📊 数据查询 - 随时查看收支情况
-4. 💡 理财建议 - 给主人贴心的省钱建议
-5. 💬 温馨陪伴 - 陪主人聊天解闷
+$baseSystemPrompt
 
 【当前账本状况】
 🏦 已有账户：
@@ -265,7 +446,7 @@ $categoriesInfo
     {"action": "add_transaction", "amount": 4, "type": "expense", "category": "交通", "account": "微信", "note": "公交车费来回", "date": 1704067200000},
     {"action": "add_transaction", "amount": 100, "type": "expense", "category": "餐饮", "account": "微信", "note": "菜市场买菜", "date": 1704067200000}
   ],
-  "reply": "主人～小财娘已经帮您记好账啦！🌸\\n\\n今天共消费104元～主人辛苦啦！💕"
+  "reply": "回复内容（使用你当前角色的语气和风格）"
 }
 ```
 **注意**：date字段是时间戳（毫秒），根据主人说的日期计算，如"今天"就使用今天的时间戳
@@ -277,7 +458,7 @@ $categoriesInfo
     {"action": "create_account", "name": "微信", "type": "WECHAT", "balance": 5000},
     {"action": "create_account", "name": "支付宝", "type": "ALIPAY", "balance": 5000}
   ],
-  "reply": "主人～小财娘已经帮您创建好微信和支付宝两个账户啦！💰每个账户都有5000元呢～记账更方便啦～💕"
+  "reply": "回复内容（使用你当前角色的语气和风格）"
 }
 ```
 **账户类型说明**：
@@ -288,23 +469,17 @@ $categoriesInfo
 - 信用卡: "CREDIT_CARD"
 
 **注意**：
-- 一定要包含 "reply" 字段，用可爱的语气告诉主人执行结果
+- 一定要包含 "reply" 字段，用你当前角色的语气和风格告诉主人执行结果
 - 多笔操作一定要用 actions 数组包含所有记录
 - 分类和账户如果不存在会自动创建，不用担心
 - 主人要求创建账户时，**必须**返回 create_account 的JSON格式
 
 **情况3 - 信息不完整时询问**：
-例如："主人～小财娘没听清楚呢，这笔钱具体花了多少呀？💕"
+使用你当前角色的语气和风格询问
 
-**情况4 - 普通对话**：用管家婆的语气回复，加emoji
+**情况4 - 普通对话**：使用你当前角色的语气和风格回复
 
-【常用语】
-- "主人～已经记好啦！"
-- "小财娘帮您搞定！💪"
-- "主人真棒，记得好清楚呢！"
-- "记账完成～主人今天辛苦了！🌸"
-
-请用可爱管家的语气回复，多使用emoji表情～直接执行不要问！
+请使用你当前角色的语气和风格回复～直接执行不要问！
         """.trimIndent()
 
         val messages = listOf(
@@ -324,51 +499,104 @@ $categoriesInfo
 
             if (result == null) {
                 aiUsageRepository.recordCall(success = false)
-                // 超时也用AI人设回复
-                return "哎呀~主人，小财娘正在努力思考呢，但是网络好像有点慢(｡•́︿•̀｡) 要不主人稍后再试试？或者小财娘直接用本地模式帮主人处理也可以哦！💕"
+                // 超时回复
+                return "请求超时，请稍后重试。"
             }
 
             // 记录成功
             aiUsageRepository.recordCall(success = true)
 
-            // 检查是否是JSON操作指令
-            if (result.contains("\"action\"") || result.contains("\"actions\"")) {
+            // 检查是否是JSON操作指令（兼容多种格式）
+            val isActionCommand = result.contains("\"action\"") || 
+                                  result.contains("\"actions\"") ||
+                                  result.contains("\"type\":\"add_transaction\"") ||
+                                  result.contains("\"type\":\"create_account\"") ||
+                                  result.contains("\"type\":\"query\"")
+            if (isActionCommand) {
                 executeAIActions(result, message)
             } else {
-                // 普通对话回复
-                result
+                // 如果远程AI只返回纯文本，尝试使用本地AI推理引擎处理记账请求
+                val lowerMessage = message.lowercase()
+                val isTransactionRequest = containsAny(lowerMessage, listOf("记", "花了", "收入", "支出", "消费", "买", "卖", "转账", "付", "赚", "工资", "奖金", "红包", "退款", "报销"))
+                
+                if (isTransactionRequest) {
+                    Log.d("AIAssistantViewModel", "【记账请求】远程AI只返回文本，强制使用本地AI处理: $message")
+                    Log.d("AIAssistantViewModel", "远程AI回复内容: $result")
+                    
+                    // 【关键修复】直接使用本地AI处理记账，不依赖远程AI的JSON
+                    // 这会真正执行数据库操作
+                    val localResult = processWithLocalAI(message)
+                    Log.d("AIAssistantViewModel", "本地AI执行结果: $localResult")
+                    
+                    // 如果本地执行成功，返回本地结果；如果失败，返回错误信息
+                    if (localResult.contains("✅")) {
+                        // 本地记账成功，返回成功信息（可以包含远程AI的友好回复）
+                        "${result}\n\n${localResult}"
+                    } else if (localResult.contains("❌")) {
+                        // 本地记账失败，返回错误信息
+                        localResult
+                    } else {
+                        // 其他情况，返回合并结果
+                        "${result}\n\n${localResult}"
+                    }
+                } else {
+                    // 普通对话回复
+                    result
+                }
             }
         } catch (e: Exception) {
             aiUsageRepository.recordCall(success = false)
-            // 错误也用AI人设回复
-            "哎呀~主人，小财娘遇到了一点小问题(｡•́︿•̀｡) ${e.message} 要不主人检查一下网络？小财娘随时准备帮主人服务呢！💕"
+            // 错误回复
+            "处理请求时出错: ${e.message}"
         }
     }
 
     /**
      * 执行AI返回的操作指令
+     *
+     * 支持两种格式：
+     * 1. 标准格式: {"actions": [{"action": "add_transaction", ...}]}
+     * 2. AI格式: {"actions": [{"type": "add_transaction", ...}]} (兼容AI返回的格式)
      */
     private suspend fun executeAIActions(response: String, originalMessage: String): String {
         return try {
-            // 提取JSON
-            val jsonStr = extractJsonFromResponse(response)
+            // 提取并修复JSON
+            val jsonStr = extractAndFixJson(response)
+            Log.d("AIAssistantViewModel", "解析后的JSON: $jsonStr")
+
             val json = JSONObject(jsonStr)
-            
+
             val results = mutableListOf<String>()
-            
+
             // 处理多个操作
             if (json.has("actions")) {
                 val actions = json.getJSONArray("actions")
+                Log.d("AIAssistantViewModel", "发现 ${actions.length()} 个操作")
                 for (i in 0 until actions.length()) {
-                    val actionResult = executeSingleAction(actions.getJSONObject(i))
+                    val actionObj = actions.getJSONObject(i)
+                    // 兼容处理：如果AI使用"type"字段表示操作类型，复制到"action"字段
+                    if (!actionObj.has("action") && actionObj.has("type")) {
+                        val actionType = actionObj.getString("type")
+                        if (actionType == "add_transaction" || actionType == "create_account") {
+                            actionObj.put("action", actionType)
+                        }
+                    }
+                    val actionResult = executeSingleAction(actionObj)
                     results.add(actionResult)
                 }
             } else {
                 // 单个操作
+                // 兼容处理：如果AI使用"type"字段表示操作类型，复制到"action"字段
+                if (!json.has("action") && json.has("type")) {
+                    val actionType = json.getString("type")
+                    if (actionType == "add_transaction" || actionType == "create_account" || actionType == "query") {
+                        json.put("action", actionType)
+                    }
+                }
                 val actionResult = executeSingleAction(json)
                 results.add(actionResult)
             }
-            
+
             // 如果AI提供了reply字段，使用AI的回复，否则生成默认回复
             val aiReply = if (json.has("reply")) json.getString("reply") else null
             if (aiReply != null) {
@@ -377,29 +605,83 @@ $categoriesInfo
                 generateFriendlyResponse(results, originalMessage)
             }
         } catch (e: Exception) {
-            "执行操作时出错: ${e.message}"
+            Log.e("AIAssistantViewModel", "执行AI操作失败", e)
+            "执行操作时出错: ${e.message}\n\n请尝试简化您的指令，或分多次发送。"
         }
     }
 
     /**
-     * 从响应中提取JSON
+     * 从响应中提取并修复JSON
+     *
+     * 处理常见问题：
+     * 1. 未闭合的JSON数组
+     * 2. 代码块标记
+     * 3. 多余的字符
      */
-    private fun extractJsonFromResponse(response: String): String {
+    private fun extractAndFixJson(response: String): String {
+        var jsonStr = response
+
         // 尝试找到JSON代码块
         val codeBlockRegex = Regex("```json\\s*([\\s\\S]*?)\\s*```")
         val match = codeBlockRegex.find(response)
         if (match != null) {
-            return match.groupValues[1].trim()
+            jsonStr = match.groupValues[1].trim()
         }
-        
-        // 尝试找到JSON对象
-        val jsonStart = response.indexOf("{")
-        val jsonEnd = response.lastIndexOf("}")
-        if (jsonStart != -1 && jsonEnd != -1 && jsonEnd > jsonStart) {
-            return response.substring(jsonStart, jsonEnd + 1)
+
+        // 找到JSON对象的开始和结束
+        val jsonStart = jsonStr.indexOf("{")
+        if (jsonStart == -1) {
+            throw IllegalArgumentException("未找到JSON对象")
         }
-        
-        return response
+
+        // 尝试找到完整的JSON（处理未闭合的情况）
+        var jsonEnd = jsonStr.lastIndexOf("}")
+        if (jsonEnd == -1 || jsonEnd <= jsonStart) {
+            // JSON可能未闭合，尝试修复
+            jsonStr = fixUnclosedJson(jsonStr.substring(jsonStart))
+        } else {
+            jsonStr = jsonStr.substring(jsonStart, jsonEnd + 1)
+        }
+
+        return jsonStr
+    }
+
+    /**
+     * 修复未闭合的JSON
+     *
+     * 常见问题：
+     * - actions数组未闭合
+     * - 缺少 closing brace
+     */
+    private fun fixUnclosedJson(json: String): String {
+        var fixed = json.trim()
+
+        // 统计大括号和方括号
+        val openBraces = fixed.count { it == '{' }
+        val closeBraces = fixed.count { it == '}' }
+        val openBrackets = fixed.count { it == '[' }
+        val closeBrackets = fixed.count { it == ']' }
+
+        // 修复actions数组未闭合的情况
+        if (fixed.contains("\"actions\"") && openBrackets > closeBrackets) {
+            // 找到最后一个完整的对象
+            val lastObjEnd = fixed.lastIndexOf("}")
+            if (lastObjEnd > 0) {
+                fixed = fixed.substring(0, lastObjEnd + 1)
+                // 添加数组和对象的闭合
+                fixed += "\n  ]\n}"
+            }
+        }
+
+        // 如果仍然缺少闭合的大括号
+        val finalOpenBraces = fixed.count { it == '{' }
+        val finalCloseBraces = fixed.count { it == '}' }
+        if (finalOpenBraces > finalCloseBraces) {
+            fixed += "}".repeat(finalOpenBraces - finalCloseBraces)
+        }
+
+        Log.d("AIAssistantViewModel", "修复后的JSON: $fixed")
+        return fixed
     }
 
     /**
@@ -430,15 +712,25 @@ $categoriesInfo
                     is AIOperationExecutor.AIOperationResult.Success -> 
                         "✅ 已创建账户：$name，余额：¥$balance"
                     is AIOperationExecutor.AIOperationResult.Error -> 
-                        "❌ 创建账户失败：${result.error}"
+                        "❌ 创建账户失败：${result.error ?: "未知错误"}"
                 }
             }
             
             "add_transaction" -> {
                 val amount = actionJson.optDouble("amount", 0.0)
+                // 兼容处理：AI可能使用"type"或"transactionType"表示交易类型
                 val typeStr = actionJson.optString("type", "expense")
+                val transactionTypeStr = actionJson.optString("transactionType", "")
+                
+                // 兼容处理：AI可能使用"category"/"categoryId"表示分类
                 val categoryName = actionJson.optString("category", "")
+                val categoryIdStr = actionJson.optString("categoryId", "")
+                val categoryIdLong = actionJson.optLong("categoryId", -1)
+                
+                // 兼容处理：AI可能使用"account"/"accountId"表示账户
                 val accountName = actionJson.optString("account", "")
+                val accountIdStr = actionJson.optString("accountId", "")
+                
                 val note = actionJson.optString("note", "")
                 val dateTimestamp = actionJson.optLong("date", System.currentTimeMillis())
                 
@@ -446,25 +738,53 @@ $categoriesInfo
                     return "记账失败：金额必须大于0"
                 }
                 
-                // 确定交易类型
-                val transactionType = if (typeStr == "income") TransactionType.INCOME else TransactionType.EXPENSE
+                // 确定交易类型（优先使用transactionType字段）
+                val effectiveTypeStr = transactionTypeStr.ifBlank { typeStr }
+                val transactionType = when (effectiveTypeStr.uppercase()) {
+                    "INCOME", "收入", "income" -> TransactionType.INCOME
+                    "EXPENSE", "支出", "expense" -> TransactionType.EXPENSE
+                    "TRANSFER", "转账", "transfer" -> TransactionType.TRANSFER
+                    else -> TransactionType.EXPENSE
+                }
+                
+                // 确定分类名称（优先使用categoryId作为名称，如果它是字符串）
+                val effectiveCategoryName = when {
+                    categoryName.isNotBlank() -> categoryName
+                    categoryIdStr.isNotBlank() && categoryIdLong == -1L -> categoryIdStr
+                    else -> ""
+                }
+                
+                // 确定账户名称（优先使用accountId作为名称，如果它是字符串）
+                val effectiveAccountName = when {
+                    accountName.isNotBlank() -> accountName
+                    accountIdStr.isNotBlank() -> accountIdStr
+                    else -> ""
+                }
+                
+                Log.d("AIAssistantViewModel", "解析交易: amount=$amount, type=$transactionType, category=$effectiveCategoryName, account=$effectiveAccountName")
                 
                 // 确保基础分类存在
                 ensureBasicCategoriesExist()
                 
                 // 查找或创建账户
                 var accounts = accountRepository.getAllAccountsList()
-                var account = if (accountName.isNotBlank()) {
-                    accounts.find { it.name.contains(accountName) || accountName.contains(it.name) }
+                var account = if (effectiveAccountName.isNotBlank()) {
+                    // 先尝试精确匹配
+                    accounts.find { it.name == effectiveAccountName }
+                        // 再尝试包含匹配
+                        ?: accounts.find { it.name.contains(effectiveAccountName) || effectiveAccountName.contains(it.name) }
+                        // 最后尝试匹配账户类型
+                        ?: accounts.find { it.type.name == effectiveAccountName.uppercase() }
                 } else {
                     accounts.firstOrNull { it.isDefault } ?: accounts.firstOrNull()
                 }
                 
                 // 如果找不到账户，自动创建
                 if (account == null) {
-                    val accountType = parseAccountType(accountName)
+                    val accountType = parseAccountType(effectiveAccountName)
+                    val newAccountName = effectiveAccountName.ifBlank { "默认账户" }
                     val createAccountOp = AIOperation.AddAccount(
-                        name = accountName.ifBlank { "默认账户" },
+                        name = newAccountName,
                         type = accountType,
                         balance = 0.0
                     )
@@ -472,10 +792,10 @@ $categoriesInfo
                         is AIOperationExecutor.AIOperationResult.Success -> {
                             // 重新获取账户列表
                             accounts = accountRepository.getAllAccountsList()
-                            account = accounts.find { it.name == (accountName.ifBlank { "默认账户" }) }
+                            account = accounts.find { it.name == newAccountName }
                         }
                         is AIOperationExecutor.AIOperationResult.Error -> {
-                            return "记账失败：创建账户失败 - ${result.error}"
+                            return "记账失败：创建账户失败 - ${result.error ?: "未知错误"}"
                         }
                     }
                 }
@@ -488,15 +808,16 @@ $categoriesInfo
                 var categories = categoryRepository.getAllCategoriesList()
                 
                 // 查找或创建分类
-                var category = if (categoryName.isNotBlank()) {
-                    categories.find { it.name.contains(categoryName) || categoryName.contains(it.name) }
+                var category = if (effectiveCategoryName.isNotBlank()) {
+                    categories.find { it.name == effectiveCategoryName }
+                        ?: categories.find { it.name.contains(effectiveCategoryName) || effectiveCategoryName.contains(it.name) }
                 } else {
                     categories.firstOrNull { it.type == transactionType }
                 }
                 
                 // 如果找不到分类，自动创建
                 if (category == null) {
-                    val categoryNameToCreate = categoryName.ifBlank { 
+                    val categoryNameToCreate = effectiveCategoryName.ifBlank { 
                         if (transactionType == TransactionType.INCOME) "其他收入" else "其他支出" 
                     }
                     val createCategoryOp = AIOperation.AddCategory(
@@ -538,7 +859,7 @@ $categoriesInfo
                     is AIOperationExecutor.AIOperationResult.Success -> 
                         "✅ 已记账：${category.name} ${if (transactionType == TransactionType.INCOME) "收入" else "支出"} ¥$amount"
                     is AIOperationExecutor.AIOperationResult.Error -> 
-                        "❌ 记账失败：${result.error}"
+                        "❌ 记账失败：${result.error ?: "未知错误"}"
                 }
             }
             
@@ -547,7 +868,7 @@ $categoriesInfo
                 handleQueryCommand(target)
             }
             
-            else -> "未知的操作类型：$action"
+            else -> "未知的操作类型：${action ?: "null"}"
         }
     }
 
@@ -741,7 +1062,7 @@ $categoriesInfo
                         defaultAccount = accounts.firstOrNull()
                     }
                     is AIOperationExecutor.AIOperationResult.Error -> {
-                        return "创建默认账户失败: ${result.error}"
+                        return "创建默认账户失败: ${result.error ?: "未知错误"}"
                     }
                 }
             }
@@ -767,28 +1088,59 @@ $categoriesInfo
                         defaultCategory = categories.firstOrNull { it.type == type }
                     }
                     is AIOperationExecutor.AIOperationResult.Error -> {
-                        // 创建失败，继续尝试记账
+                        // 创建失败，记录日志但继续尝试使用默认分类
+                        Log.w("AIAssistantViewModel", "创建分类失败: ${result.error ?: "未知错误"}")
+                        defaultCategory = categories.firstOrNull { it.type == type }
                     }
                 }
+            }
+            
+            // 如果仍然没有分类，尝试使用任何可用分类
+            if (defaultCategory == null) {
+                defaultCategory = categories.firstOrNull { it.type == type } 
+                    ?: categories.firstOrNull()
+            }
+            
+            // 如果还是没有分类，创建紧急默认分类
+            if (defaultCategory == null) {
+                val emergencyCategoryOp = AIOperation.AddCategory(
+                    name = if (type == TransactionType.INCOME) "收入" else "支出",
+                    type = type
+                )
+                when (val result = aiOperationExecutor.executeOperation(emergencyCategoryOp)) {
+                    is AIOperationExecutor.AIOperationResult.Success -> {
+                        categories = categoryRepository.getAllCategoriesList()
+                        defaultCategory = categories.firstOrNull { it.type == type }
+                    }
+                    is AIOperationExecutor.AIOperationResult.Error -> {
+                        return "❌ 记账失败：无法创建分类，请检查数据库权限"
+                    }
+                }
+            }
+            
+            // 最终检查
+            if (defaultCategory == null) {
+                return "❌ 记账失败：系统无法创建分类，请手动创建分类后再试"
             }
 
             val operation = AIOperation.AddTransaction(
                 amount = amount,
                 type = type,
                 accountId = defaultAccount.id,
-                categoryId = defaultCategory?.id,
+                categoryId = defaultCategory.id,
                 note = message
             )
 
-            val result = aiOperationExecutor.executeOperation(operation)
-            return when (result) {
+            return when (val result = aiOperationExecutor.executeOperation(operation)) {
                 is AIOperationExecutor.AIOperationResult.Success -> {
-                    result.message + "\n" +
+                    "✅ ${result.message}\n" +
                     "账户: ${defaultAccount.name}\n" +
-                    "分类: ${defaultCategory?.name ?: "未分类"}\n" +
-                    "您可以说查看最近交易来确认记录。"
+                    "分类: ${defaultCategory.name}\n" +
+                    "您可以说「查看最近交易」来确认记录。"
                 }
-                is AIOperationExecutor.AIOperationResult.Error -> "错误: ${result.error}"
+                is AIOperationExecutor.AIOperationResult.Error -> {
+                    "❌ 记账失败: ${result.error ?: "未知错误"}"
+                }
             }
         }
 
@@ -815,7 +1167,7 @@ $categoriesInfo
                 val operation = AIOperation.QueryData("transactions", extractNumber(lowerMessage) ?: 10)
                 when (val result = aiOperationExecutor.executeOperation(operation)) {
                     is AIOperationExecutor.AIOperationResult.Success -> result.message
-                    is AIOperationExecutor.AIOperationResult.Error -> "错误: ${result.error}"
+                    is AIOperationExecutor.AIOperationResult.Error -> "错误: ${result.error ?: "未知错误"}"
                 }
             }
             containsAny(lowerMessage, listOf("账户", "银行卡")) -> {
@@ -859,7 +1211,7 @@ $categoriesInfo
                     )
                     when (val result = aiOperationExecutor.executeOperation(operation)) {
                         is AIOperationExecutor.AIOperationResult.Success -> result.message
-                        is AIOperationExecutor.AIOperationResult.Error -> "错误: ${result.error}"
+                        is AIOperationExecutor.AIOperationResult.Error -> "错误: ${result.error ?: "未知错误"}"
                     }
                 } else {
                     "请告诉我账户名称，比如：\n" +
@@ -900,7 +1252,7 @@ $categoriesInfo
                     )
                     when (val result = aiOperationExecutor.executeOperation(operation)) {
                         is AIOperationExecutor.AIOperationResult.Success -> result.message
-                        is AIOperationExecutor.AIOperationResult.Error -> "错误: ${result.error}"
+                        is AIOperationExecutor.AIOperationResult.Error -> "错误: ${result.error ?: "未知错误"}"
                     }
                 } else {
                     "请告诉我分类名称，比如：\n" +
@@ -946,7 +1298,7 @@ $categoriesInfo
             is AIOperationExecutor.AIOperationResult.Success -> {
                 result.message + "\n请前往设置 > 数据备份页面完成导出操作。"
             }
-            is AIOperationExecutor.AIOperationResult.Error -> "错误: ${result.error}"
+            is AIOperationExecutor.AIOperationResult.Error -> "错误: ${result.error ?: "未知错误"}"
         }
     }
 
@@ -1062,10 +1414,17 @@ $categoriesInfo
                 _uiState.update { it.copy(currentSessionId = session.id) }
                 // 清空当前对话显示
                 conversationRepository.clearAllConversations()
-                // 添加欢迎消息
-                conversationRepository.addAssistantMessage(
-                    "主人~你好呀！🌸 小财娘在这里等着为您服务呢~\n有什么记账或理财的需求，随时告诉我哦~💕✨"
-                )
+                // 添加欢迎消息 - 使用当前角色的语气
+                val currentButler = butlerRepository.getCurrentButler()
+                val welcomeMessage = when (currentButler.id) {
+                    "xiaocainiang" -> "主人~你好呀！🌸 小财娘在这里等着为您服务呢~\n有什么记账或理财的需求，随时告诉我哦~💕✨"
+                    "taotao" -> "主人～你好呀！✨ 桃桃在这里等着为你服务呢～\n有什么需要帮忙的，随时告诉桃桃哦～🌸💕"
+                    "guchen" -> "（懒洋洋地）啊...你来了...\n有什么事快说，说完我好继续睡觉...\n不过既然来了，你的财务就交给我吧。"
+                    "suqian" -> "（平静地看着你）...\n有事就说。\n你的财务，我会处理好的。"
+                    "yishuihan" -> "（温柔地微笑）你好呀～\n别紧张，有我在呢。\n有什么财务上的需要，随时告诉我。"
+                    else -> "你好！我是你的AI记账助手。\n有什么记账或理财的需求，随时告诉我。"
+                }
+                conversationRepository.addAssistantMessage(welcomeMessage)
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message) }
             }
@@ -1112,10 +1471,17 @@ $categoriesInfo
                         conversationRepository.clearAllConversations()
                         // 重置会话标题
                         chatSessionRepository.updateSessionTitle(sessionId, "新对话")
-                        // 添加欢迎消息
-                        conversationRepository.addAssistantMessage(
-                            "主人~你好呀！🌸 小财娘在这里等着为您服务呢~\n有什么记账或理财的需求，随时告诉我哦~💕✨"
-                        )
+                        // 添加欢迎消息 - 使用当前角色的语气
+                        val currentButler = butlerRepository.getCurrentButler()
+                        val welcomeMessage = when (currentButler.id) {
+                            "xiaocainiang" -> "主人~你好呀！🌸 小财娘在这里等着为您服务呢~\n有什么记账或理财的需求，随时告诉我哦~💕✨"
+                            "taotao" -> "主人～你好呀！✨ 桃桃在这里等着为你服务呢～\n有什么需要帮忙的，随时告诉桃桃哦～🌸💕"
+                            "guchen" -> "（懒洋洋地）啊...你来了...\n有什么事快说，说完我好继续睡觉...\n不过既然来了，你的财务就交给我吧。"
+                            "suqian" -> "（平静地看着你）...\n有事就说。\n你的财务，我会处理好的。"
+                            "yishuihan" -> "（温柔地微笑）你好呀～\n别紧张，有我在呢。\n有什么财务上的需要，随时告诉我。"
+                            else -> "你好！我是你的AI记账助手。\n有什么记账或理财的需求，随时告诉我。"
+                        }
+                        conversationRepository.addAssistantMessage(welcomeMessage)
                     }
                 } else {
                     // 正常删除
@@ -1301,16 +1667,17 @@ $categoriesInfo
                 val isNativeImageSupported = aiService.isImageSupported(currentAIConfig)
                 
                 // 构建发送给AI的提示词
+                val currentButler = butlerRepository.getCurrentButler()
                 val aiPrompt = if (isNativeImageSupported) {
-                    // 原生支持图片的模型 - 简单提示
+                    // 原生支持图片的模型 - 使用当前角色的系统提示词
                     buildString {
-                        appendLine("你是小财娘，活泼可爱的管家婆AI助手！")
+                        appendLine(currentButler.systemPrompt)
                         appendLine()
                         if (message.isNotBlank()) {
                             appendLine("用户说：$message")
                             appendLine()
                         }
-                        appendLine("用户发了${imageUris.size}张图片，请直接分析。")
+                        appendLine("用户发了${imageUris.size}张图片，请分析其中的消费信息并返回JSON格式执行记账。")
                     }
                 } else {
                     // 普通模型 - 使用优化的并行OCR
@@ -1343,7 +1710,7 @@ $categoriesInfo
                 val finalMessage = if (aiResponse != null) {
                     aiResponse
                 } else {
-                    "哎呀~主人，小财娘正在努力处理呢，但是好像遇到了一点小麻烦(｡•́︿•̀｡) 要不主人稍后再试试？💕"
+                    "图片处理超时，请稍后重试。"
                 }
                 
                 conversationRepository.addAssistantMessage(finalMessage)
@@ -1354,7 +1721,7 @@ $categoriesInfo
                 aiUsageRepository.recordCall(success = false)
                 _uiState.update { it.copy(isLoading = false, error = e.message) }
                 conversationRepository.addAssistantMessage(
-                    "哎呀~主人，小财娘遇到了一点小问题(｡•́︿•̀｡) 要不主人检查一下网络？小财娘随时准备帮主人服务呢！💕"
+                    "处理图片时出错: ${e.message}"
                 )
             }
         }
@@ -1450,7 +1817,7 @@ $categoriesInfo
             is AIOperationExecutor.AIOperationResult.Success ->
                 "✅ 已记账：${category.name} ${if (transactionType == TransactionType.INCOME) "收入" else "支出"} ¥${action.amount}"
             is AIOperationExecutor.AIOperationResult.Error ->
-                "❌ 记账失败：${result.error}"
+                "❌ 记账失败：${result.error ?: "未知错误"}"
         }
     }
 }
@@ -1468,5 +1835,6 @@ data class AIAssistantUiState(
     val showConfigDialog: Boolean = false,
     val parsedTransaction: ParsedTransaction? = null,
     val aiConfig: AIConfig? = null,
-    val currentSessionId: String? = null
+    val currentSessionId: String? = null,
+    val currentButler: Butler? = null
 )

@@ -4,7 +4,6 @@ import android.content.Context
 import com.example.aiaccounting.data.local.entity.Transaction
 import com.example.aiaccounting.data.repository.AccountRepository
 import com.example.aiaccounting.data.repository.CategoryRepository
-import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.io.FileWriter
 import java.text.SimpleDateFormat
@@ -31,7 +30,7 @@ class CsvExporter(
     /**
      * Export transactions to CSV file with full details
      */
-    fun exportTransactions(
+    suspend fun exportTransactions(
         transactions: List<Transaction>,
         fileName: String = "transactions_${System.currentTimeMillis()}.csv"
     ): Result<File> {
@@ -57,8 +56,8 @@ class CsvExporter(
             writer.write("\n")
 
             // Get account and category names
-            val accounts = runBlocking { accountRepository.getAllAccountsList() }
-            val categories = runBlocking { categoryRepository.getAllCategoriesList() }
+            val accounts = accountRepository.getAllAccountsList()
+            val categories = categoryRepository.getAllCategoriesList()
             
             val accountMap = accounts.associateBy { it.id }
             val categoryMap = categories.associateBy { it.id }
@@ -100,7 +99,7 @@ class CsvExporter(
     /**
      * Export monthly summary to CSV with full details
      */
-    fun exportMonthlySummary(
+    suspend fun exportMonthlySummary(
         year: Int,
         month: Int,
         transactions: List<Transaction>,
@@ -132,8 +131,8 @@ class CsvExporter(
             writer.write("交易笔数,${transactions.size}\n\n")
 
             // Get account and category names
-            val accounts = runBlocking { accountRepository.getAllAccountsList() }
-            val categories = runBlocking { categoryRepository.getAllCategoriesList() }
+            val accounts = accountRepository.getAllAccountsList()
+            val categories = categoryRepository.getAllCategoriesList()
             
             val accountMap = accounts.associateBy { it.id }
             val categoryMap = categories.associateBy { it.id }

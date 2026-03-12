@@ -3,9 +3,11 @@ package com.example.aiaccounting.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.aiaccounting.data.local.entity.Account
+import com.example.aiaccounting.data.local.entity.Category
 import com.example.aiaccounting.data.local.entity.Transaction
 import com.example.aiaccounting.data.local.entity.TransactionType
 import com.example.aiaccounting.data.repository.AccountRepository
+import com.example.aiaccounting.data.repository.CategoryRepository
 import com.example.aiaccounting.data.repository.TransactionRepository
 import com.example.aiaccounting.ui.components.charts.MonthlyData
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -17,7 +19,8 @@ import javax.inject.Inject
 @HiltViewModel
 class OverviewViewModel @Inject constructor(
     private val transactionRepository: TransactionRepository,
-    private val accountRepository: AccountRepository
+    private val accountRepository: AccountRepository,
+    private val categoryRepository: CategoryRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(OverviewUiState())
@@ -38,6 +41,14 @@ class OverviewViewModel @Inject constructor(
             initialValue = emptyList()
         )
 
+    // 分类数据流 - 用于获取真实分类名称
+    val categories = categoryRepository.getAllCategories()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
     val recentTransactions = transactionRepository.getRecentTransactions(10)
         .stateIn(
             scope = viewModelScope,
@@ -45,49 +56,33 @@ class OverviewViewModel @Inject constructor(
             initialValue = emptyList()
         )
 
-    // 从共享的allTransactions派生所有统计数据
-    val monthlyStats = allTransactions
+    // 合并所有统计数据为一个 Flow，避免多次 stateIn() 的内存开销
+    private val allStats = allTransactions
         .map { transactions ->
-            calculateMonthlyStats(transactions)
+            OverviewStats(
+                monthly = calculateMonthlyStats(transactions),
+                yearlyTrend = calculateYearlyTrend(transactions),
+                today = calculateTodayStats(transactions),
+                week = calculateWeekStats(transactions)
+            )
         }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = MonthlyStats()
+            initialValue = OverviewStats()
         )
 
-    // 年度趋势数据
-    val yearlyTrendData = allTransactions
-        .map { transactions ->
-            calculateYearlyTrend(transactions)
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
+    val monthlyStats = allStats.map { it.monthly }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), MonthlyStats())
 
-    // 当天统计
-    val todayStats = allTransactions
-        .map { transactions ->
-            calculateTodayStats(transactions)
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = DayStats()
-        )
+    val yearlyTrendData = allStats.map { it.yearlyTrend }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // 当周统计
-    val weekStats = allTransactions
-        .map { transactions ->
-            calculateWeekStats(transactions)
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = DayStats()
-        )
+    val todayStats = allStats.map { it.today }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DayStats())
+
+    val weekStats = allStats.map { it.week }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DayStats())
 
     fun toggleBalanceVisibility() {
         _uiState.update { it.copy(isBalanceVisible = !it.isBalanceVisible) }
@@ -193,20 +188,37 @@ class OverviewViewModel @Inject constructor(
 
     /**
      * 计算当周统计
+     * 使用与马年主题相同的计算逻辑
      */
     private fun calculateWeekStats(transactions: List<Transaction>): DayStats {
-        val calendar = Calendar.getInstance()
-        calendar.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
-        calendar.set(Calendar.HOUR_OF_DAY, 0)
-        calendar.set(Calendar.MINUTE, 0)
-        calendar.set(Calendar.SECOND, 0)
-        calendar.set(Calendar.MILLISECOND, 0)
-        val weekStart = calendar.timeInMillis
+        val today = Calendar.getInstance()
+        val currentDayOfWeek = today.get(Calendar.DAY_OF_WEEK)
+        
+        // 计算本周一（如果今天是周日，DAY_OF_WEEK=1，需要回退6天；其他情况回退到周一）
+        val daysFromMonday = if (currentDayOfWeek == Calendar.SUNDAY) 6 else currentDayOfWeek - Calendar.MONDAY
+        
+        val monday = Calendar.getInstance().apply {
+            timeInMillis = today.timeInMillis
+            add(Calendar.DAY_OF_MONTH, -daysFromMonday)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val weekStart = monday.timeInMillis
+        
+        // 计算本周日（周一 + 6天）
+        val sunday = Calendar.getInstance().apply {
+            timeInMillis = monday.timeInMillis
+            add(Calendar.DAY_OF_MONTH, 6)
+            set(Calendar.HOUR_OF_DAY, 23)
+            set(Calendar.MINUTE, 59)
+            set(Calendar.SECOND, 59)
+            set(Calendar.MILLISECOND, 999)
+        }
+        val weekEnd = sunday.timeInMillis
 
-        calendar.add(Calendar.WEEK_OF_YEAR, 1)
-        val weekEnd = calendar.timeInMillis
-
-        val weekTransactions = transactions.filter { it.date in weekStart until weekEnd }
+        val weekTransactions = transactions.filter { it.date in weekStart..weekEnd }
         val income = weekTransactions.filter { it.type == TransactionType.INCOME }.sumOf { it.amount }
         val expense = weekTransactions.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amount }
 
@@ -235,4 +247,11 @@ data class DayStats(
     val income: Double = 0.0,
     val expense: Double = 0.0,
     val count: Int = 0
+)
+
+data class OverviewStats(
+    val monthly: MonthlyStats = MonthlyStats(),
+    val yearlyTrend: List<MonthlyData> = emptyList(),
+    val today: DayStats = DayStats(),
+    val week: DayStats = DayStats()
 )

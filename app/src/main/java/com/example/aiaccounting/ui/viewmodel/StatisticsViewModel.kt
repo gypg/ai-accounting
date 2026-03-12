@@ -84,6 +84,48 @@ class StatisticsViewModel @Inject constructor(
                     calendar.get(Calendar.YEAR) == filterYear
                 }
             }
+            // 新增快捷时间筛选
+            state.timeFilter == "today" -> {
+                val today = Calendar.getInstance()
+                transactions.filter {
+                    calendar.timeInMillis = it.date
+                    calendar.get(Calendar.YEAR) == today.get(Calendar.YEAR) &&
+                    calendar.get(Calendar.DAY_OF_YEAR) == today.get(Calendar.DAY_OF_YEAR)
+                }
+            }
+            state.timeFilter == "yesterday" -> {
+                val yesterday = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
+                transactions.filter {
+                    calendar.timeInMillis = it.date
+                    calendar.get(Calendar.YEAR) == yesterday.get(Calendar.YEAR) &&
+                    calendar.get(Calendar.DAY_OF_YEAR) == yesterday.get(Calendar.DAY_OF_YEAR)
+                }
+            }
+            state.timeFilter == "this_week" -> {
+                val weekStart = Calendar.getInstance().apply {
+                    set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+                    set(Calendar.HOUR_OF_DAY, 0)
+                    set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0)
+                }
+                transactions.filter { it.date >= weekStart.timeInMillis }
+            }
+            state.timeFilter == "this_month" -> {
+                val currentMonth = calendar.get(Calendar.MONTH)
+                val currentYear = calendar.get(Calendar.YEAR)
+                transactions.filter {
+                    calendar.timeInMillis = it.date
+                    calendar.get(Calendar.MONTH) == currentMonth &&
+                    calendar.get(Calendar.YEAR) == currentYear
+                }
+            }
+            state.timeFilter == "this_year" -> {
+                val currentYear = calendar.get(Calendar.YEAR)
+                transactions.filter {
+                    calendar.timeInMillis = it.date
+                    calendar.get(Calendar.YEAR) == currentYear
+                }
+            }
             state.timeFilter == "current" -> {
                 val currentMonth = calendar.get(Calendar.MONTH)
                 val currentYear = calendar.get(Calendar.YEAR)
@@ -158,14 +200,19 @@ class StatisticsViewModel @Inject constructor(
             }
             .sortedByDescending { it.amount }
 
-        // 计算月度趋势数据
+        // 计算各种趋势数据
         val monthlyData = calculateMonthlyTrend(transactions, state.timeFilter)
+        val dailyData = calculateDailyTrend(filteredTransactions, state.timeFilter)
+        val weeklyData = calculateWeeklyTrend(filteredTransactions, state.timeFilter)
 
         return StatisticsData(
             totalIncome = totalIncome,
             totalExpense = totalExpense,
             categoryStats = categoryStats,
-            monthlyTrend = monthlyData
+            monthlyTrend = monthlyData,
+            transactions = filteredTransactions,
+            dailyTrend = dailyData,
+            weeklyTrend = weeklyData
         )
     }
 
@@ -219,10 +266,17 @@ class StatisticsViewModel @Inject constructor(
                 calendar.add(Calendar.YEAR, 1)
                 Pair(start, calendar.timeInMillis)
             }
-            timeFilter == "current" -> {
+            timeFilter == "current" || timeFilter == "this_month" -> {
                 calendar.set(Calendar.DAY_OF_MONTH, 1)
                 val start = calendar.timeInMillis
                 calendar.add(Calendar.MONTH, 1)
+                Pair(start, calendar.timeInMillis)
+            }
+            timeFilter == "this_year" -> {
+                calendar.set(Calendar.MONTH, 0)
+                calendar.set(Calendar.DAY_OF_MONTH, 1)
+                val start = calendar.timeInMillis
+                calendar.add(Calendar.YEAR, 1)
                 Pair(start, calendar.timeInMillis)
             }
             timeFilter == "last" -> {
@@ -324,6 +378,134 @@ class StatisticsViewModel @Inject constructor(
     fun setShowAllCategories(show: Boolean) {
         _uiState.update { it.copy(showAllCategories = show) }
     }
+
+    /**
+     * 计算每日趋势数据
+     */
+    private fun calculateDailyTrend(
+        transactions: List<com.example.aiaccounting.data.local.entity.Transaction>,
+        timeFilter: String
+    ): List<DailyData> {
+        val calendar = Calendar.getInstance()
+        val dateFormat = SimpleDateFormat("MM-dd", Locale.getDefault())
+        val fullDateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val dayOfWeekFormat = SimpleDateFormat("EEE", Locale.getDefault())
+
+        // 根据时间筛选确定日期范围
+        val daysToShow = when (timeFilter) {
+            "current", "last" -> 30 // 当月/上月显示30天
+            "3months" -> 90
+            "6months" -> 180
+            "1year" -> 365
+            "all" -> 30
+            else -> 30
+        }
+
+        val endDate = Calendar.getInstance()
+        val startDate = Calendar.getInstance().apply {
+            add(Calendar.DAY_OF_MONTH, -daysToShow + 1)
+        }
+
+        // 按日期分组
+        val dailyGroups = transactions.groupBy { transaction ->
+            fullDateFormat.format(Date(transaction.date))
+        }
+
+        // 生成所有日期（包括没有数据的日期）
+        val result = mutableListOf<DailyData>()
+        calendar.timeInMillis = startDate.timeInMillis
+
+        while (calendar.timeInMillis <= endDate.timeInMillis) {
+            val dateKey = fullDateFormat.format(calendar.time)
+            val dayTransactions = dailyGroups[dateKey] ?: emptyList()
+
+            val income = dayTransactions
+                .filter { it.type == TransactionType.INCOME }
+                .sumOf { it.amount }
+            val expense = dayTransactions
+                .filter { it.type == TransactionType.EXPENSE }
+                .sumOf { it.amount }
+
+            result.add(
+                DailyData(
+                    date = dateFormat.format(calendar.time),
+                    income = income,
+                    expense = expense,
+                    dayOfWeek = dayOfWeekFormat.format(calendar.time)
+                )
+            )
+
+            calendar.add(Calendar.DAY_OF_MONTH, 1)
+        }
+
+        return result
+    }
+
+    /**
+     * 计算每周趋势数据
+     */
+    private fun calculateWeeklyTrend(
+        transactions: List<com.example.aiaccounting.data.local.entity.Transaction>,
+        timeFilter: String
+    ): List<WeeklyData> {
+        val calendar = Calendar.getInstance()
+        val weekFormat = SimpleDateFormat("MM/dd", Locale.getDefault())
+
+        // 根据时间筛选确定周数
+        val weeksToShow = when (timeFilter) {
+            "current", "last" -> 4
+            "3months" -> 12
+            "6months" -> 24
+            "1year" -> 52
+            "all" -> 12
+            else -> 4
+        }
+
+        val endDate = Calendar.getInstance()
+        val startDate = Calendar.getInstance().apply {
+            add(Calendar.WEEK_OF_YEAR, -weeksToShow + 1)
+            set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+        }
+
+        // 按周分组
+        val weeklyGroups = transactions.groupBy { transaction ->
+            calendar.timeInMillis = transaction.date
+            calendar.get(Calendar.WEEK_OF_YEAR)
+        }
+
+        // 生成所有周
+        val result = mutableListOf<WeeklyData>()
+        calendar.timeInMillis = startDate.timeInMillis
+
+        for (weekNum in 0 until weeksToShow) {
+            val weekOfYear = calendar.get(Calendar.WEEK_OF_YEAR)
+            val weekTransactions = weeklyGroups[weekOfYear] ?: emptyList()
+
+            val income = weekTransactions
+                .filter { it.type == TransactionType.INCOME }
+                .sumOf { it.amount }
+            val expense = weekTransactions
+                .filter { it.type == TransactionType.EXPENSE }
+                .sumOf { it.amount }
+
+            val weekStart = calendar.timeInMillis
+            calendar.add(Calendar.DAY_OF_MONTH, 6)
+            val weekEnd = calendar.timeInMillis
+            calendar.add(Calendar.DAY_OF_MONTH, 1) // 移动到下周
+
+            result.add(
+                WeeklyData(
+                    week = "第${weekNum + 1}周",
+                    income = income,
+                    expense = expense,
+                    startDate = weekFormat.format(Date(weekStart)),
+                    endDate = weekFormat.format(Date(weekEnd))
+                )
+            )
+        }
+
+        return result
+    }
 }
 
 data class StatisticsUiState(
@@ -339,7 +521,27 @@ data class StatisticsData(
     val totalIncome: Double = 0.0,
     val totalExpense: Double = 0.0,
     val categoryStats: List<CategoryStat> = emptyList(),
-    val monthlyTrend: List<MonthlyData> = emptyList()
+    val monthlyTrend: List<MonthlyData> = emptyList(),
+    val transactions: List<com.example.aiaccounting.data.local.entity.Transaction> = emptyList(),
+    val dailyTrend: List<DailyData> = emptyList(),
+    val weeklyTrend: List<WeeklyData> = emptyList()
+)
+
+// 每日数据
+data class DailyData(
+    val date: String,
+    val income: Double,
+    val expense: Double,
+    val dayOfWeek: String
+)
+
+// 每周数据
+data class WeeklyData(
+    val week: String,
+    val income: Double,
+    val expense: Double,
+    val startDate: String,
+    val endDate: String
 )
 
 data class CategoryStat(

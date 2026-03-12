@@ -1,5 +1,9 @@
 package com.example.aiaccounting.widget
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -9,7 +13,6 @@ import android.os.IBinder
 import android.provider.Settings
 import android.view.Gravity
 import android.view.LayoutInflater
-import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.Button
@@ -19,8 +22,14 @@ import android.widget.LinearLayout
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.Toast
+import androidx.core.app.NotificationCompat
+import com.example.aiaccounting.MainActivity
 import com.example.aiaccounting.R
 import com.example.aiaccounting.data.local.entity.TransactionType
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.LocalDateTime
@@ -36,15 +45,63 @@ class FloatingWidgetService : Service() {
     private var windowManager: WindowManager? = null
     private var floatingView: View? = null
     private var params: WindowManager.LayoutParams? = null
+    
+    // 协程作用域用于管理异步任务
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    companion object {
+        const val CHANNEL_ID = "floating_widget_channel"
+        const val NOTIFICATION_ID = 1001
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        createNotificationChannel()
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "悬浮窗服务",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "用于显示记账悬浮窗"
+                setShowBadge(false)
+            }
+            val notificationManager = getSystemService(NotificationManager::class.java)
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    private fun createNotification(): Notification {
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("AI记账悬浮窗")
+            .setContentText("点击返回应用")
+            .setSmallIcon(R.drawable.ic_add)
+            .setContentIntent(pendingIntent)
+            .setOngoing(true)
+            .setSilent(true)
+            .build()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Android 8+ 需要启动前台服务
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForeground(NOTIFICATION_ID, createNotification())
+        }
+
         val transactionType = intent?.getStringExtra("transaction_type") ?: "expense"
 
         // 检查悬浮窗权限
@@ -257,8 +314,20 @@ class FloatingWidgetService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        floatingView?.let {
-            windowManager?.removeView(it)
+        try {
+            floatingView?.let {
+                windowManager?.removeView(it)
+            }
+        } catch (e: Exception) {
+            // 忽略视图已移除的异常
+            android.util.Log.w("FloatingWidget", "Error removing view: ${e.message}")
+        } finally {
+            floatingView = null
+            windowManager = null
+            params = null
         }
+        
+        // 取消所有协程
+        serviceScope.cancel()
     }
 }

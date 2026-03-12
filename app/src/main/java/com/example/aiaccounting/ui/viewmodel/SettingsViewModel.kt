@@ -60,6 +60,9 @@ class SettingsViewModel @Inject constructor(
     fun changePin(oldPin: String, newPin: String, onComplete: (Boolean) -> Unit) {
         viewModelScope.launch {
             val success = securityManager.changePin(oldPin, newPin)
+            if (success) {
+                _uiState.value = _uiState.value.copy(isPinSet = true)
+            }
             onComplete(success)
         }
     }
@@ -69,8 +72,21 @@ class SettingsViewModel @Inject constructor(
      */
     fun clearPin() {
         viewModelScope.launch {
-            securityManager.clearPin()
-            _uiState.value = _uiState.value.copy(isPinSet = false)
+            val success = securityManager.clearPin()
+            if (success) {
+                _uiState.value = _uiState.value.copy(isPinSet = false)
+            }
+        }
+    }
+
+    /**
+     * Refresh PIN status
+     */
+    fun refreshPinStatus() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isPinSet = securityManager.isPinSet()
+            )
         }
     }
 

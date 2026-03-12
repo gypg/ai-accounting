@@ -1,6 +1,7 @@
 package com.example.aiaccounting.security
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import androidx.security.crypto.EncryptedSharedPreferences
@@ -30,27 +31,41 @@ class SecurityManager(private val context: Context) {
         private const val LOCK_DURATION_MS = 30 * 60 * 1000 // 30 minutes
     }
 
-    private val masterKey: MasterKey by lazy {
-        MasterKey.Builder(context)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
+    private var masterKey: MasterKey? = null
+    private var encryptedPrefs: SharedPreferences? = null
+
+    private fun getMasterKey(): MasterKey {
+        if (masterKey == null) {
+            masterKey = MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+        }
+        return masterKey!!
     }
 
-    private val encryptedPrefs by lazy {
-        EncryptedSharedPreferences.create(
-            context,
-            SHARED_PREFS_NAME,
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
+    private fun getEncryptedPrefs(): SharedPreferences {
+        if (encryptedPrefs == null) {
+            encryptedPrefs = EncryptedSharedPreferences.create(
+                context,
+                SHARED_PREFS_NAME,
+                getMasterKey(),
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        }
+        return encryptedPrefs!!
     }
 
     /**
      * Check if PIN is set
      */
     fun isPinSet(): Boolean {
-        return encryptedPrefs.contains(PIN_HASH_KEY)
+        return try {
+            getEncryptedPrefs().contains(PIN_HASH_KEY)
+        } catch (e: Exception) {
+            // 如果初始化失败，返回false
+            false
+        }
     }
 
     /**
@@ -63,12 +78,29 @@ class SecurityManager(private val context: Context) {
 
         val salt = generateSalt()
         val pinHash = hashPinWithSalt(pin, salt)
-        encryptedPrefs.edit()
+        getEncryptedPrefs().edit()
             .putString(PIN_HASH_KEY, pinHash)
             .putString(PIN_SALT_KEY, android.util.Base64.encodeToString(salt, android.util.Base64.DEFAULT))
             .putInt(FAILED_ATTEMPTS_KEY, 0)
             .apply()
         return true
+    }
+
+    /**
+     * Clear PIN - removes PIN protection
+     */
+    fun clearPin(): Boolean {
+        return try {
+            getEncryptedPrefs().edit()
+                .remove(PIN_HASH_KEY)
+                .remove(PIN_SALT_KEY)
+                .remove(FAILED_ATTEMPTS_KEY)
+                .remove(LOCK_TIME_KEY)
+                .apply()
+            true
+        } catch (e: Exception) {
+            false
+        }
     }
 
     /**
@@ -80,28 +112,28 @@ class SecurityManager(private val context: Context) {
             return false
         }
 
-        val storedHash = encryptedPrefs.getString(PIN_HASH_KEY, null) ?: return false
-        val saltBase64 = encryptedPrefs.getString(PIN_SALT_KEY, null)
+        val storedHash = getEncryptedPrefs().getString(PIN_HASH_KEY, null) ?: return false
+        val saltBase64 = getEncryptedPrefs().getString(PIN_SALT_KEY, null)
         val salt = saltBase64?.let { android.util.Base64.decode(it, android.util.Base64.DEFAULT) } ?: ByteArray(0)
         val inputHash = hashPinWithSalt(inputPin, salt)
 
         if (inputHash == storedHash) {
             // Reset failed attempts on success
-            encryptedPrefs.edit()
+            getEncryptedPrefs().edit()
                 .putInt(FAILED_ATTEMPTS_KEY, 0)
                 .putLong(LOCK_TIME_KEY, 0)
                 .apply()
             return true
         } else {
             // Increment failed attempts
-            val failedAttempts = encryptedPrefs.getInt(FAILED_ATTEMPTS_KEY, 0) + 1
-            encryptedPrefs.edit()
+            val failedAttempts = getEncryptedPrefs().getInt(FAILED_ATTEMPTS_KEY, 0) + 1
+            getEncryptedPrefs().edit()
                 .putInt(FAILED_ATTEMPTS_KEY, failedAttempts)
                 .apply()
 
             // Lock if max attempts reached
             if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
-                encryptedPrefs.edit()
+                getEncryptedPrefs().edit()
                     .putLong(LOCK_TIME_KEY, System.currentTimeMillis())
                     .apply()
             }
@@ -119,25 +151,9 @@ class SecurityManager(private val context: Context) {
 
         val newSalt = generateSalt()
         val newPinHash = hashPinWithSalt(newPin, newSalt)
-        encryptedPrefs.edit()
+        getEncryptedPrefs().edit()
             .putString(PIN_HASH_KEY, newPinHash)
             .putString(PIN_SALT_KEY, android.util.Base64.encodeToString(newSalt, android.util.Base64.DEFAULT))
-            .apply()
-        return true
-    }
-
-    /**
-     * Clear PIN
-     */
-    fun clearPin(): Boolean {
-        if (!isPinSet()) {
-            return false // No PIN set
-        }
-        encryptedPrefs.edit()
-            .remove(PIN_HASH_KEY)
-            .remove(PIN_SALT_KEY)
-            .putInt(FAILED_ATTEMPTS_KEY, 0)
-            .putLong(LOCK_TIME_KEY, 0)
             .apply()
         return true
     }
@@ -146,13 +162,13 @@ class SecurityManager(private val context: Context) {
      * Check if app is locked due to too many failed attempts
      */
     fun isLocked(): Boolean {
-        val lockTime = encryptedPrefs.getLong(LOCK_TIME_KEY, 0)
+        val lockTime = getEncryptedPrefs().getLong(LOCK_TIME_KEY, 0)
         if (lockTime == 0L) return false
 
         val currentTime = System.currentTimeMillis()
         if (currentTime - lockTime >= LOCK_DURATION_MS) {
             // Lock period expired
-            encryptedPrefs.edit()
+            getEncryptedPrefs().edit()
                 .putLong(LOCK_TIME_KEY, 0)
                 .putInt(FAILED_ATTEMPTS_KEY, 0)
                 .apply()
@@ -165,7 +181,7 @@ class SecurityManager(private val context: Context) {
      * Get remaining lock time in milliseconds
      */
     fun getRemainingLockTime(): Long {
-        val lockTime = encryptedPrefs.getLong(LOCK_TIME_KEY, 0)
+        val lockTime = getEncryptedPrefs().getLong(LOCK_TIME_KEY, 0)
         if (lockTime == 0L) return 0
 
         val elapsed = System.currentTimeMillis() - lockTime
@@ -176,7 +192,7 @@ class SecurityManager(private val context: Context) {
      * Get number of failed attempts
      */
     fun getFailedAttempts(): Int {
-        return encryptedPrefs.getInt(FAILED_ATTEMPTS_KEY, 0)
+        return getEncryptedPrefs().getInt(FAILED_ATTEMPTS_KEY, 0)
     }
 
     /**
@@ -267,14 +283,14 @@ class SecurityManager(private val context: Context) {
      * Check if biometric authentication is enabled
      */
     fun isBiometricEnabled(): Boolean {
-        return encryptedPrefs.getBoolean(BIOMETRIC_ENABLED_KEY, false)
+        return getEncryptedPrefs().getBoolean(BIOMETRIC_ENABLED_KEY, false)
     }
 
     /**
      * Enable/disable biometric authentication
      */
     fun setBiometricEnabled(enabled: Boolean) {
-        encryptedPrefs.edit()
+        getEncryptedPrefs().edit()
             .putBoolean(BIOMETRIC_ENABLED_KEY, enabled)
             .apply()
     }
@@ -290,7 +306,7 @@ class SecurityManager(private val context: Context) {
         val encryptedBase64 = android.util.Base64.encodeToString(encrypted, android.util.Base64.DEFAULT)
         val ivBase64 = android.util.Base64.encodeToString(iv, android.util.Base64.DEFAULT)
         
-        encryptedPrefs.edit()
+        getEncryptedPrefs().edit()
             .putString("${prefKey}_data", encryptedBase64)
             .putString("${prefKey}_iv", ivBase64)
             .apply()
@@ -300,8 +316,8 @@ class SecurityManager(private val context: Context) {
      * Retrieve and decrypt string
      */
     fun getEncryptedString(prefKey: String): String? {
-        val encryptedBase64 = encryptedPrefs.getString("${prefKey}_data", null) ?: return null
-        val ivBase64 = encryptedPrefs.getString("${prefKey}_iv", null) ?: return null
+        val encryptedBase64 = getEncryptedPrefs().getString("${prefKey}_data", null) ?: return null
+        val ivBase64 = getEncryptedPrefs().getString("${prefKey}_iv", null) ?: return null
         
         val encrypted = android.util.Base64.decode(encryptedBase64, android.util.Base64.DEFAULT)
         val iv = android.util.Base64.decode(ivBase64, android.util.Base64.DEFAULT)

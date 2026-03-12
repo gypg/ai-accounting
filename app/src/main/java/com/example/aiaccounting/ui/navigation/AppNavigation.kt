@@ -14,6 +14,7 @@ import androidx.navigation.navArgument
 import com.example.aiaccounting.data.local.prefs.AppStateManager
 import com.example.aiaccounting.ui.components.BottomNavBar
 import com.example.aiaccounting.ui.components.BottomNavItems
+import com.example.aiaccounting.ui.components.HorseBottomNavBar
 import com.example.aiaccounting.ui.screens.*
 
 /**
@@ -40,6 +41,8 @@ sealed class Screen(val route: String) {
     object Templates : Screen("templates")
     object Import : Screen("import")
     object AISettings : Screen("ai_settings")
+    object ButlerSettings : Screen("butler_settings")
+    object Tags : Screen("tags")
 }
 
 /**
@@ -50,7 +53,6 @@ fun AppNavigation(
     navController: NavHostController,
     startDestination: String,
     appStateManager: AppStateManager,
-    isHorseTheme: Boolean = false,
     onSetupComplete: (String) -> Unit = {},
     onLoginSuccess: (String) -> Unit = {},
     onInitialSetupComplete: () -> Unit = {},
@@ -64,25 +66,43 @@ fun AppNavigation(
         "overview", "transactions", "statistics", "settings"
     )
 
+    // 获取当前主题
+    val currentTheme = appStateManager.getTheme()
+    val isHorseTheme = currentTheme == "horse_2026"
+
     Scaffold(
         bottomBar = {
             if (showBottomBar) {
-                BottomNavBar(
-                    currentRoute = currentRoute ?: "overview",
-                    onNavigate = { route ->
-                        navController.navigate(route) {
-                            // 保存当前页面状态
-                            popUpTo("overview") {
-                                saveState = true
+                if (isHorseTheme) {
+                    // 马年主题底部导航栏
+                    HorseBottomNavBar(
+                        currentRoute = currentRoute ?: "overview",
+                        onNavigate = { route ->
+                            navController.navigate(route) {
+                                popUpTo("overview") {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
                             }
-                            // 避免重复创建页面
-                            launchSingleTop = true
-                            // 恢复之前保存的状态
-                            restoreState = true
                         }
-                    },
-                    items = BottomNavItems.items
-                )
+                    )
+                } else {
+                    // 默认底部导航栏
+                    BottomNavBar(
+                        currentRoute = currentRoute ?: "overview",
+                        onNavigate = { route ->
+                            navController.navigate(route) {
+                                popUpTo("overview") {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        },
+                        items = BottomNavItems.items
+                    )
+                }
             }
         }
     ) { innerPadding ->
@@ -130,6 +150,11 @@ fun AppNavigation(
                         navController.navigate("overview") {
                             popUpTo(Screen.InitialSetup.route) { inclusive = true }
                         }
+                    },
+                    onNavigateToSetupPin = {
+                        navController.navigate(Screen.SetupPin.route) {
+                            // 设置PIN码后返回初始设置
+                        }
                     }
                 )
             }
@@ -143,6 +168,12 @@ fun AppNavigation(
                         },
                         onNavigateToAI = {
                             navController.navigate(Screen.AIAssistant.route)
+                        },
+                        onNavigateToTransactions = {
+                            navController.navigate("transactions")
+                        },
+                        onNavigateToStatistics = {
+                            navController.navigate("statistics")
                         }
                     )
                 } else {
@@ -200,7 +231,7 @@ fun AppNavigation(
                             navController.navigate(Screen.Profile.route)
                         },
                         onNavigateToAIModelSettings = {
-                            navController.navigate(Screen.AIModelSettings.route)
+                            navController.navigate(Screen.ButlerSettings.route)
                         },
                         onNavigateToAccounts = {
                             navController.navigate(Screen.Accounts.route)
@@ -222,6 +253,9 @@ fun AppNavigation(
                         },
                         onNavigateToBudgets = {
                             navController.navigate(Screen.Budgets.route)
+                        },
+                        onNavigateToSetupPin = {
+                            navController.navigate(Screen.SetupPin.route)
                         },
                         onLogout = {
                             appStateManager.setLoggedIn(false)
@@ -243,7 +277,7 @@ fun AppNavigation(
                             navController.navigate(Screen.Profile.route)
                         },
                         onNavigateToAIModelSettings = {
-                            navController.navigate(Screen.AIModelSettings.route)
+                            navController.navigate(Screen.ButlerSettings.route)
                         },
                         onNavigateToAccounts = {
                             navController.navigate(Screen.Accounts.route)
@@ -266,8 +300,10 @@ fun AppNavigation(
                         onNavigateToBudgets = {
                             navController.navigate(Screen.Budgets.route)
                         },
+                        onNavigateToSetupPin = {
+                            navController.navigate(Screen.SetupPin.route)
+                        },
                         onLogout = {
-                            // 清除登录状态并跳转到登录页面
                             appStateManager.setLoggedIn(false)
                             navController.navigate(Screen.Login.route) {
                                 popUpTo(0) { inclusive = true }
@@ -355,13 +391,17 @@ fun AppNavigation(
                 )
             }
 
-            // Profile
+            // Profile / Personal Center
             composable(Screen.Profile.route) {
-                ProfileScreen(
+                PersonalCenterScreen(
                     appStateManager = appStateManager,
                     onNavigateBack = {
                         navController.popBackStack()
-                    }
+                    },
+                    onNavigateToSetupPin = {
+                        navController.navigate(Screen.SetupPin.route)
+                    },
+                    onThemeChanged = onThemeChanged
                 )
             }
 
@@ -400,6 +440,24 @@ fun AppNavigation(
             composable(Screen.AISettings.route) {
                 AISettingsScreen(
                     onNavigateBack = {
+                        navController.popBackStack()
+                    }
+                )
+            }
+            
+            // Butler Settings
+            composable(Screen.ButlerSettings.route) {
+                ButlerSettingsScreen(
+                    onNavigateBack = {
+                        navController.popBackStack()
+                    }
+                )
+            }
+
+            // Tags
+            composable(Screen.Tags.route) {
+                TagsScreen(
+                    onBack = {
                         navController.popBackStack()
                     }
                 )

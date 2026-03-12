@@ -832,7 +832,7 @@ private fun ChartLegend() {
  * 空数据提示
  */
 @Composable
-private fun EmptyChartMessage(message: String = "暂无数据") {
+fun EmptyChartMessage(message: String = "暂无数据") {
     Box(
         modifier = Modifier
             .fillMaxWidth()

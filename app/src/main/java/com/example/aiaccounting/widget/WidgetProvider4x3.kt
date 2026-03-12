@@ -7,6 +7,8 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.util.Log
+import android.view.View
 import android.widget.RemoteViews
 import com.example.aiaccounting.R
 import java.time.LocalDateTime
@@ -33,6 +35,8 @@ class WidgetProvider4x3 : AppWidgetProvider() {
 
         fun updateAppWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
             val views = RemoteViews(context.packageName, R.layout.widget_accounting_4x3)
+            
+            Log.d("WidgetProvider4x3", "开始更新小组件: appWidgetId=$appWidgetId")
 
             // 更新时间
             val now = LocalDateTime.now()
@@ -58,26 +62,46 @@ class WidgetProvider4x3 : AppWidgetProvider() {
                 views.setProgressBar(R.id.progress_budget, 100, progress, false)
                 views.setTextViewText(R.id.tv_budget_percent, "$progress%")
 
-                // 加载图表
+                // 加载趋势图
                 val trendChartBase64 = prefs.getString("trend_chart", null)
-                val pieChartBase64 = prefs.getString("pie_chart", null)
-
-                trendChartBase64?.let {
-                    val bitmap = WidgetChartGenerator.base64ToBitmap(it)
-                    bitmap?.let { b ->
-                        views.setImageViewBitmap(R.id.chart_trend, b)
+                Log.d("WidgetProvider4x3", "趋势图Base64: ${trendChartBase64 != null}")
+                
+                if (trendChartBase64 != null) {
+                    val bitmap = WidgetChartGenerator.base64ToBitmap(trendChartBase64)
+                    if (bitmap != null) {
+                        views.setImageViewBitmap(R.id.chart_trend, bitmap)
+                        views.setViewVisibility(R.id.chart_trend, View.VISIBLE)
+                        Log.d("WidgetProvider4x3", "趋势图加载成功")
+                    } else {
+                        Log.w("WidgetProvider4x3", "趋势图解码失败")
+                        views.setViewVisibility(R.id.chart_trend, View.GONE)
                     }
+                } else {
+                    Log.w("WidgetProvider4x3", "趋势图数据为空")
+                    views.setViewVisibility(R.id.chart_trend, View.GONE)
                 }
 
-                pieChartBase64?.let {
-                    val bitmap = WidgetChartGenerator.base64ToBitmap(it)
-                    bitmap?.let { b ->
-                        views.setImageViewBitmap(R.id.chart_pie, b)
+                // 加载饼图
+                val pieChartBase64 = prefs.getString("pie_chart", null)
+                Log.d("WidgetProvider4x3", "饼图Base64: ${pieChartBase64 != null}")
+                
+                if (pieChartBase64 != null) {
+                    val bitmap = WidgetChartGenerator.base64ToBitmap(pieChartBase64)
+                    if (bitmap != null) {
+                        views.setImageViewBitmap(R.id.chart_pie, bitmap)
+                        views.setViewVisibility(R.id.chart_pie, View.VISIBLE)
+                        Log.d("WidgetProvider4x3", "饼图加载成功")
+                    } else {
+                        Log.w("WidgetProvider4x3", "饼图解码失败")
+                        views.setViewVisibility(R.id.chart_pie, View.GONE)
                     }
+                } else {
+                    Log.w("WidgetProvider4x3", "饼图数据为空")
+                    views.setViewVisibility(R.id.chart_pie, View.GONE)
                 }
 
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.e("WidgetProvider4x3", "更新小组件失败: ${e.message}", e)
             }
 
             // 记支出按钮 - 发送广播

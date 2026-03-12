@@ -8,8 +8,6 @@ import android.content.Context
 import android.content.Intent
 import android.widget.RemoteViews
 import com.example.aiaccounting.R
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
 
 /**
  * 1x1 余额小组件
@@ -31,19 +29,15 @@ class WidgetProvider1x1 : AppWidgetProvider() {
             val views = RemoteViews(context.packageName, R.layout.widget_accounting_1x1)
 
             // 加载结余数据
-            GlobalScope.launch {
-                try {
-                    val prefs = context.getSharedPreferences("widget_stats", Context.MODE_PRIVATE)
-                    val income = prefs.getFloat("month_income", 0f)
-                    val expense = prefs.getFloat("month_expense", 0f)
-                    val balance = income - expense
+            try {
+                val prefs = context.getSharedPreferences("widget_stats", Context.MODE_PRIVATE)
+                val income = prefs.getFloat("month_income", 0f)
+                val expense = prefs.getFloat("month_expense", 0f)
+                val balance = income - expense
 
-                    views.setTextViewText(R.id.tv_balance, "¥${String.format("%.0f", balance)}")
-
-                    appWidgetManager.updateAppWidget(appWidgetId, views)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
+                views.setTextViewText(R.id.tv_balance, "¥${String.format("%.0f", balance)}")
+            } catch (e: Exception) {
+                views.setTextViewText(R.id.tv_balance, "¥0")
             }
 
             // 点击发送广播

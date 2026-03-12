@@ -521,22 +521,28 @@ class AIService @Inject constructor() {
                 throw Exception("API请求失败: ${response.code}")
             }
 
-            val responseBody = response.body?.string() ?: throw Exception("空响应")
-            val json = JSONObject(responseBody)
-            
-            // 检查是否有错误
-            if (json.has("error")) {
-                val error = json.getJSONObject("error")
-                throw Exception(error.optString("message", "未知错误"))
-            }
-            
-            val choices = json.getJSONArray("choices")
-            if (choices.length() > 0) {
-                return choices.getJSONObject(0)
-                    .getJSONObject("message")
-                    .getString("content")
-            }
-            throw Exception("无效的响应格式")
+            response.body?.use { body ->
+                val responseBody = body.string()
+                if (responseBody.isNullOrEmpty()) {
+                    throw Exception("空响应")
+                }
+                
+                val json = JSONObject(responseBody)
+                
+                // 检查是否有错误
+                if (json.has("error")) {
+                    val error = json.getJSONObject("error")
+                    throw Exception(error.optString("message", "未知错误"))
+                }
+                
+                val choices = json.getJSONArray("choices")
+                if (choices.length() > 0) {
+                    return choices.getJSONObject(0)
+                        .getJSONObject("message")
+                        .getString("content")
+                }
+                throw Exception("无效的响应格式")
+            } ?: throw Exception("响应体为空")
         }
     }
 
@@ -849,14 +855,52 @@ private fun uriToBase64(uri: Uri, context: Context): String? {
 
 /**
  * 压缩图片（如果需要）
+ * 使用JPEG压缩算法，确保图片质量的同时限制大小
  */
 private fun compressImageIfNeeded(imageBytes: ByteArray): ByteArray {
     // 如果图片小于1MB，直接返回
     if (imageBytes.size < 1024 * 1024) {
         return imageBytes
     }
-    // 否则返回前1MB（简单处理）
-    return imageBytes.copyOfRange(0, minOf(imageBytes.size, 1024 * 1024))
+    
+    return try {
+        // 解码图片
+        val bitmap = android.graphics.BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+            ?: return imageBytes // 解码失败返回原图
+        
+        // 如果图片尺寸过大，先缩小尺寸
+        val maxDimension = 1920 // 最大边长
+        val scaledBitmap = if (bitmap.width > maxDimension || bitmap.height > maxDimension) {
+            val ratio = maxDimension.toFloat() / maxOf(bitmap.width, bitmap.height)
+            val newWidth = (bitmap.width * ratio).toInt()
+            val newHeight = (bitmap.height * ratio).toInt()
+            android.graphics.Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true).also {
+                if (it != bitmap) bitmap.recycle()
+            }
+        } else {
+            bitmap
+        }
+        
+        // 使用JPEG压缩
+        val outputStream = java.io.ByteArrayOutputStream()
+        var quality = 90
+        do {
+            outputStream.reset()
+            scaledBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, quality, outputStream)
+            quality -= 10
+        } while (outputStream.size() > 1024 * 1024 && quality > 30)
+        
+        // 回收Bitmap
+        if (scaledBitmap != bitmap) {
+            scaledBitmap.recycle()
+        }
+        bitmap.recycle()
+        
+        outputStream.toByteArray()
+    } catch (e: Exception) {
+        // 压缩失败返回原图
+        imageBytes
+    }
 }
 
 /**

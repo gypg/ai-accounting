@@ -185,10 +185,28 @@ class NaturalLanguageParser @Inject constructor() {
 
     /**
      * 提取具体日期
+     * 支持格式：2026年3月15日、3月15日、3.15、3-15、3/15
      */
     private fun extractSpecificDate(input: String): Date? {
         val calendar = Calendar.getInstance()
         val currentYear = calendar.get(Calendar.YEAR)
+        
+        // 首先尝试匹配完整日期格式：2026年3月15日
+        val fullDatePattern = "(\\d{4})年(\\d{1,2})月(\\d{1,2})[日号]?"
+        val fullDateMatcher = Pattern.compile(fullDatePattern).matcher(input)
+        if (fullDateMatcher.find()) {
+            val year = fullDateMatcher.group(1)?.toIntOrNull()
+            val month = fullDateMatcher.group(2)?.toIntOrNull()
+            val day = fullDateMatcher.group(3)?.toIntOrNull()
+            
+            if (year != null && month != null && day != null) {
+                if (month in 1..12 && day in 1..31) {
+                    calendar.set(year, month - 1, day, 0, 0, 0)
+                    calendar.set(Calendar.MILLISECOND, 0)
+                    return calendar.time
+                }
+            }
+        }
         
         // 匹配模式：3月15日、3.15、3-15、3/15
         val patterns = listOf(
@@ -207,7 +225,8 @@ class NaturalLanguageParser @Inject constructor() {
                 if (month != null && day != null) {
                     // 验证日期有效性
                     if (month in 1..12 && day in 1..31) {
-                        calendar.set(currentYear, month - 1, day)
+                        calendar.set(currentYear, month - 1, day, 0, 0, 0)
+                        calendar.set(Calendar.MILLISECOND, 0)
                         // 如果日期在未来，可能是去年的
                         if (calendar.time.after(Date())) {
                             calendar.add(Calendar.YEAR, -1)

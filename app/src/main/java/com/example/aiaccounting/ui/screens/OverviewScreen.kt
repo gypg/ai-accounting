@@ -390,6 +390,25 @@ fun TodayWeekStatsCard(
     weekIncome: Double,
     weekExpense: Double
 ) {
+    // 计算本周日期范围（与ViewModel使用相同的逻辑）
+    val today = Calendar.getInstance()
+    val currentDayOfWeek = today.get(Calendar.DAY_OF_WEEK)
+    // 如果今天是周日，DAY_OF_WEEK=1，需要回退6天；其他情况回退到周一
+    val daysFromMonday = if (currentDayOfWeek == Calendar.SUNDAY) 6 else currentDayOfWeek - Calendar.MONDAY
+    
+    val monday = Calendar.getInstance().apply {
+        timeInMillis = today.timeInMillis
+        add(Calendar.DAY_OF_MONTH, -daysFromMonday)
+    }
+    
+    val sunday = Calendar.getInstance().apply {
+        timeInMillis = monday.timeInMillis
+        add(Calendar.DAY_OF_MONTH, 6)
+    }
+    
+    val dateFormat = java.text.SimpleDateFormat("MM/dd", java.util.Locale.getDefault())
+    val weekRange = "${dateFormat.format(monday.time)} - ${dateFormat.format(sunday.time)}"
+    
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -432,7 +451,7 @@ fun TodayWeekStatsCard(
                 // 本周统计
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        text = "本周",
+                        text = "本周 ($weekRange)",
                         fontSize = 12.sp,
                         color = Color.Gray
                     )
@@ -478,7 +497,12 @@ fun YearlyTrendCard(
                     data = monthlyData,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(180.dp)
+                        .height(180.dp),
+                    showIncome = true,
+                    showExpense = true,
+                    onDataPointClick = { selectedData ->
+                        // 点击数据点显示详情
+                    }
                 )
             } else {
                 Box(

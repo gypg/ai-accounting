@@ -34,10 +34,18 @@ class AISettingsViewModel @Inject constructor(
 
     private fun loadAIConfig() {
         viewModelScope.launch {
+            // 加载是否使用内置配置
+            aiConfigRepository.getUseBuiltin().collect { useBuiltin ->
+                _uiState.value = _uiState.value.copy(
+                    useBuiltinConfig = useBuiltin,
+                    isLoading = false
+                )
+            }
+        }
+        viewModelScope.launch {
             aiConfigRepository.getAIConfig().collect { config ->
                 _uiState.value = _uiState.value.copy(
-                    config = config,
-                    isLoading = false
+                    config = config
                 )
             }
         }
@@ -114,6 +122,33 @@ class AISettingsViewModel @Inject constructor(
 
     fun clearSaveSuccess() {
         _uiState.value = _uiState.value.copy(saveSuccess = false)
+    }
+
+    /**
+     * 切换是否使用内置配置
+     * 当启用默认模型时，使用内置配置
+     * 当取消默认模型时，清空API配置，让用户手动输入
+     */
+    fun toggleBuiltinConfig(useBuiltin: Boolean) {
+        viewModelScope.launch {
+            aiConfigRepository.setUseBuiltin(useBuiltin)
+            _uiState.value = _uiState.value.copy(
+                useBuiltinConfig = useBuiltin,
+                config = if (useBuiltin) {
+                    // 启用默认模型：使用内置配置
+                    AIConfig.BUILTIN_CONFIG
+                } else {
+                    // 取消默认模型：清空API配置，让用户手动输入
+                    AIConfig(
+                        provider = AIProvider.CUSTOM,
+                        apiKey = "",
+                        apiUrl = "",
+                        model = "",
+                        isEnabled = true
+                    )
+                }
+            )
+        }
     }
 
     fun testConnection() {
@@ -198,7 +233,9 @@ data class AISettingsUiState(
     val usageStats: AIUsageStats = AIUsageStats(),
     val isNetworkAvailable: Boolean = true,
     val isFetchingModels: Boolean = false,
-    val remoteModels: List<RemoteModel> = emptyList()
+    val remoteModels: List<RemoteModel> = emptyList(),
+    val useBuiltinConfig: Boolean = false, // 是否使用内置配置
+    val isBuiltinAvailable: Boolean = true // 始终显示内置配置选项
 )
 
 sealed class TestResult {
